@@ -1,5 +1,4 @@
 using System;
-using NiumaMiniGame.Enum;
 using NiumaMiniGame.Protocol;
 
 namespace NiumaMiniGame.Room
@@ -31,7 +30,7 @@ namespace NiumaMiniGame.Room
     public sealed class CreateRoomResult : IRealtimeMessage
     {
         public bool succeeded;
-        public MiniGameErrorCode errorCode;
+        public string errorCode;
         public string roomId;
         public string udpBindToken;
         public int udpPort;
@@ -48,7 +47,7 @@ namespace NiumaMiniGame.Room
     public sealed class JoinRoomResult : IRealtimeMessage
     {
         public bool succeeded;
-        public MiniGameErrorCode errorCode;
+        public string errorCode;
         public string roomId;
         public string udpBindToken;
         public int udpPort;
@@ -61,6 +60,7 @@ namespace NiumaMiniGame.Room
     [Serializable]
     public sealed class LeaveRoomRequest : IRealtimeMessage
     {
+        public string roomId;
     }
 
     /// <summary>
@@ -85,7 +85,7 @@ namespace NiumaMiniGame.Room
     public sealed class ReconnectResult : IRealtimeMessage
     {
         public bool succeeded;
-        public MiniGameErrorCode errorCode;
+        public string errorCode;
         public string sessionId;
         public RoomSnapshot snapshot;
     }
@@ -95,7 +95,7 @@ namespace NiumaMiniGame.Room
     {
         public string roomId;
         public string modeId;
-        public MiniGameRoomState state;
+        public string state;
         public int roundIndex;
         public int maxRoundCount;
         public string drawerPlayerId;
@@ -129,5 +129,58 @@ namespace NiumaMiniGame.Room
         public int totalScore;
         public int delta;
         public string reason;
+    }
+
+    [Serializable]
+    public sealed class PlayerJoined : IRealtimeMessage
+    {
+        public string playerId;
+        public string displayName;
+    }
+
+    [Serializable]
+    public sealed class PlayerLeft : IRealtimeMessage
+    {
+        public string playerId;
+        public string displayName;
+    }
+
+    [Serializable]
+    public sealed class RoundStarted : IRealtimeMessage
+    {
+        public int roundIndex;
+        public int maxRoundCount;
+        public string drawerPlayerId;
+        public float drawDurationSeconds;
+        public long deadlineTimeMs;
+    }
+
+    [Serializable]
+    public sealed class RoundEnded : IRealtimeMessage
+    {
+        public int roundIndex;
+        public string wordId;
+        public string wordText;
+        public ScoreEntry[] scores;
+    }
+
+    [Serializable]
+    public sealed class GameEnded : IRealtimeMessage
+    {
+        public ScoreEntry[] finalScores;
+        public string winnerPlayerId;
+    }
+
+    [Serializable]
+    public sealed class WordOptionsPushed : IRealtimeMessage
+    {
+        public WordOption[] options;
+    }
+
+    [Serializable]
+    public sealed class WordOption
+    {
+        public string wordId;
+        public string wordText;
     }
 }

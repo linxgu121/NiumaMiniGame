@@ -1,6 +1,4 @@
 using System;
-using NiumaMiniGame.Enum;
-
 namespace NiumaMiniGame.Protocol
 {
     [Serializable]
@@ -14,7 +12,7 @@ namespace NiumaMiniGame.Protocol
     public sealed class ErrorMessage : IRealtimeMessage
     {
         public string requestId;
-        public MiniGameErrorCode errorCode;
+        public string errorCode;
         public string messageKey;
         public string debugMessage;
     }

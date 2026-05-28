@@ -1,14 +1,23 @@
 using System;
-using NiumaMiniGame.Enum;
 using NiumaMiniGame.Protocol;
 
 namespace NiumaMiniGame.Telephone
 {
     [Serializable]
+    public sealed class DrawTelephoneStarted : IRealtimeMessage
+    {
+        public int stageCount;
+        public float drawStageSeconds;
+        public float guessStageSeconds;
+        public float reviewSecondsPerChain;
+        public long roomSeed;
+    }
+
+    [Serializable]
     public sealed class DrawTelephoneStageStarted : IRealtimeMessage
     {
         public int stageIndex;
-        public TelephoneActionType actionType;
+        public string actionType;
         public float stageDurationSeconds;
         public long deadlineTimeMs;
         public DrawTelephoneTask[] tasks;
@@ -19,7 +28,7 @@ namespace NiumaMiniGame.Telephone
     {
         public string chainId;
         public int stageIndex;
-        public TelephoneActionType actionType;
+        public string actionType;
         public string promptWord;
         public string previousGuess;
         public string previousStrokeGroupId;
@@ -41,6 +50,12 @@ namespace NiumaMiniGame.Telephone
     }
 
     [Serializable]
+    public sealed class DrawTelephoneChainReviewed : IRealtimeMessage
+    {
+        public DrawTelephoneChainState chain;
+    }
+
+    [Serializable]
     public sealed class DrawTelephoneChainState
     {
         public string chainId;
@@ -56,7 +71,7 @@ namespace NiumaMiniGame.Telephone
     {
         public int stageIndex;
         public string playerId;
-        public TelephoneActionType actionType;
+        public string actionType;
         public string strokeGroupId;
         public string guessText;
         public long submittedTimeMs;

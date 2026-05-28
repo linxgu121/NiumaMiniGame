@@ -1,5 +1,4 @@
 using System;
-using NiumaMiniGame.Enum;
 using NiumaMiniGame.Protocol;
 
 namespace NiumaMiniGame.Drawing
@@ -49,8 +48,6 @@ namespace NiumaMiniGame.Drawing
         public string roomId;
         public string strokeId;
         public int strokeSequence;
-        public int batchIndex;
-        public int batchCount;
         public DrawPointData[] points;
     }
 
@@ -82,6 +79,28 @@ namespace NiumaMiniGame.Drawing
     public sealed class UdpBindAccepted : IRealtimeMessage
     {
         public bool succeeded;
-        public MiniGameErrorCode errorCode;
+        public string errorCode;
+    }
+
+    [Serializable]
+    public sealed class UndoStrokeRequest : IRealtimeMessage
+    {
+        public string strokeId;
+    }
+
+    [Serializable]
+    public sealed class StrokeUndone : IRealtimeMessage
+    {
+        public string strokeId;
+        public string playerId;
+    }
+
+    [Serializable]
+    public sealed class StrokeCommitted : IRealtimeMessage
+    {
+        public string strokeId;
+        public string strokeGroupId;
+        public string playerId;
+        public int totalPoints;
     }
 }
