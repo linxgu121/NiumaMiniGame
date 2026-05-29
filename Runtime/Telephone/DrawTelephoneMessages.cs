@@ -1,4 +1,5 @@
 using System;
+using NiumaMiniGame.Drawing;
 using NiumaMiniGame.Protocol;
 
 namespace NiumaMiniGame.Telephone
@@ -32,6 +33,25 @@ namespace NiumaMiniGame.Telephone
         public string promptWord;
         public string previousGuess;
         public string previousStrokeGroupId;
+        public DrawTelephoneCanvasData previousCanvas;
+    }
+
+    [Serializable]
+    public sealed class DrawTelephoneCanvasData
+    {
+        public string strokeGroupId;
+        public DrawTelephoneStrokeData[] strokes;
+    }
+
+    [Serializable]
+    public sealed class DrawTelephoneStrokeData
+    {
+        public string strokeId;
+
+        /// <summary>
+        /// 前端使用 Unity 友好的点位结构；真实后端适配层负责把服务端 float[][] 转为 DrawPointData[]。
+        /// </summary>
+        public DrawPointData[] points;
     }
 
     [Serializable]

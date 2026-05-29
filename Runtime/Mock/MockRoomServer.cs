@@ -7,6 +7,7 @@ using NiumaMiniGame.Gift;
 using NiumaMiniGame.Network;
 using NiumaMiniGame.Protocol;
 using NiumaMiniGame.Room;
+using NiumaMiniGame.Telephone;
 
 namespace NiumaMiniGame.Mock
 {
@@ -17,6 +18,12 @@ namespace NiumaMiniGame.Mock
     public sealed class MockRoomServer
     {
         private const int MaxRoomIdRetryCount = 10;
+        private const int DrawTelephoneMinPlayers = 2;
+        private const float MockDrawStageSeconds = 90f;
+        private const float MockGuessStageSeconds = 45f;
+        private const float MockReviewSecondsPerChain = 8f;
+        private const string DrawActionType = "DRAW";
+        private const string GuessActionType = "GUESS";
         private static readonly char[] RoomIdChars =
             "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
 
@@ -108,6 +115,12 @@ namespace NiumaMiniGame.Mock
                 case ReconnectRequest request:
                     HandleReconnect(session, request);
                     break;
+                case SubmitTelephoneDrawing request:
+                    HandleSubmitTelephoneDrawing(session, request);
+                    break;
+                case SubmitTelephoneGuess request:
+                    HandleSubmitTelephoneGuess(session, request);
+                    break;
                 default:
                     session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidMessage));
                     break;
@@ -125,7 +138,7 @@ namespace NiumaMiniGame.Mock
             switch (message)
             {
                 case StrokePointBatch batch:
-                    BroadcastUnreliableToRoom(session.RoomId, MessageType.StrokePointBatch, batch);
+                    HandleStrokePointBatch(session, batch);
                     break;
                 case CursorPreview preview:
                     BroadcastUnreliableToRoom(session.RoomId, MessageType.CursorPreview, preview);
@@ -255,6 +268,7 @@ namespace NiumaMiniGame.Mock
             {
                 player.Ready = request.ready;
                 BroadcastRoomSnapshot(room);
+                TryStartDrawTelephone(room);
             }
         }
 
@@ -346,7 +360,7 @@ namespace NiumaMiniGame.Mock
             {
                 succeeded = true,
                 sessionId = session.SessionId,
-                snapshot = BuildSnapshot(room)
+                snapshot = BuildSnapshot(room, request.playerId)
             }, room.RoomId);
 
             BroadcastRoomSnapshot(room);
@@ -370,6 +384,486 @@ namespace NiumaMiniGame.Mock
             player.Connected = true;
         }
 
+        private void TryStartDrawTelephone(MockRoomRuntime room)
+        {
+            if (room == null
+                || !string.Equals(room.ModeId, "draw_telephone", StringComparison.Ordinal)
+                || !string.Equals(room.State, nameof(MiniGameRoomState.Lobby), StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (room.Players.Count < DrawTelephoneMinPlayers || room.Players.Count % 2 != 0)
+            {
+                return;
+            }
+
+            foreach (var player in room.Players.Values)
+            {
+                if (!player.Ready || !player.Connected)
+                {
+                    return;
+                }
+            }
+
+            StartDrawTelephone(room);
+        }
+
+        private void StartDrawTelephone(MockRoomRuntime room)
+        {
+            var playerIds = new List<string>(room.Players.Keys);
+            playerIds.Sort(StringComparer.Ordinal);
+
+            room.RoomSeed = MockMiniGameTime.NowMs;
+            ShufflePlayerIds(playerIds, room.RoomSeed);
+            room.MaxRoundCount = playerIds.Count;
+            room.RoundIndex = 0;
+            room.CurrentStageIndex = -1;
+            room.Chains.Clear();
+            room.StrokeGroups.Clear();
+
+            for (var chainIndex = 0; chainIndex < playerIds.Count; chainIndex++)
+            {
+                var chain = new MockDrawTelephoneChainRuntime
+                {
+                    ChainId = $"chain_{chainIndex + 1:00}",
+                    OriginalWordId = $"mock_word_{chainIndex + 1:00}",
+                    OriginalWordText = MockWordText(chainIndex),
+                    StarterPlayerId = playerIds[chainIndex],
+                    Entries = new MockDrawTelephoneStageEntryRuntime[playerIds.Count]
+                };
+
+                for (var stageIndex = 0; stageIndex < playerIds.Count; stageIndex++)
+                {
+                    chain.Entries[stageIndex] = new MockDrawTelephoneStageEntryRuntime
+                    {
+                        StageIndex = stageIndex,
+                        PlayerId = playerIds[(chainIndex + stageIndex) % playerIds.Count],
+                        ActionType = stageIndex % 2 == 0 ? DrawActionType : GuessActionType,
+                        IsTimeoutSubmit = false
+                    };
+                }
+
+                room.Chains.Add(chain);
+            }
+
+            room.State = nameof(MiniGameRoomState.Preparing);
+            room.StateEnterTimeMs = MockMiniGameTime.NowMs;
+            room.StateDeadlineTimeMs = 0L;
+
+            BroadcastReliableToRoom(room.RoomId, MessageType.DrawTelephoneStarted, new DrawTelephoneStarted
+            {
+                stageCount = room.MaxRoundCount,
+                drawStageSeconds = MockDrawStageSeconds,
+                guessStageSeconds = MockGuessStageSeconds,
+                reviewSecondsPerChain = MockReviewSecondsPerChain,
+                roomSeed = room.RoomSeed
+            });
+
+            AdvanceDrawTelephoneStage(room, false);
+        }
+
+        private void AdvanceDrawTelephoneStage(MockRoomRuntime room, bool publishPreviousStageEnd)
+        {
+            if (publishPreviousStageEnd)
+            {
+                BroadcastReliableToRoom(room.RoomId, MessageType.DrawTelephoneStageEnded, new DrawTelephoneStageEnded
+                {
+                    stageIndex = room.CurrentStageIndex,
+                    allSubmitted = true,
+                    timeoutReached = false
+                });
+            }
+
+            var nextStageIndex = room.CurrentStageIndex + 1;
+            if (nextStageIndex >= room.MaxRoundCount)
+            {
+                StartDrawTelephoneReview(room);
+                return;
+            }
+
+            room.CurrentStageIndex = nextStageIndex;
+            room.RoundIndex = nextStageIndex;
+            room.CurrentActionType = nextStageIndex % 2 == 0 ? DrawActionType : GuessActionType;
+            room.State = nameof(MiniGameRoomState.Playing);
+            room.StateEnterTimeMs = MockMiniGameTime.NowMs;
+            var durationSeconds = string.Equals(room.CurrentActionType, DrawActionType, StringComparison.Ordinal)
+                ? MockDrawStageSeconds
+                : MockGuessStageSeconds;
+            room.StateDeadlineTimeMs = room.StateEnterTimeMs + (long)(durationSeconds * 1000f);
+            room.CurrentTasks.Clear();
+            room.SubmittedPlayers.Clear();
+
+            foreach (var chain in room.Chains)
+            {
+                var entry = chain.Entries[nextStageIndex];
+                var task = BuildDrawTelephoneTask(room, chain, entry);
+                room.CurrentTasks[entry.PlayerId] = task;
+                room.SubmittedPlayers[entry.PlayerId] = false;
+            }
+
+            var publicStage = new DrawTelephoneStageStarted
+            {
+                stageIndex = nextStageIndex,
+                actionType = room.CurrentActionType,
+                stageDurationSeconds = durationSeconds,
+                deadlineTimeMs = room.StateDeadlineTimeMs,
+                tasks = new DrawTelephoneTask[0]
+            };
+            BroadcastReliableToRoom(room.RoomId, MessageType.DrawTelephoneStageStarted, publicStage);
+
+            foreach (var pair in room.CurrentTasks)
+            {
+                SendReliableToPlayer(room, pair.Key, MessageType.DrawTelephoneStageStarted, new DrawTelephoneStageStarted
+                {
+                    stageIndex = nextStageIndex,
+                    actionType = room.CurrentActionType,
+                    stageDurationSeconds = durationSeconds,
+                    deadlineTimeMs = room.StateDeadlineTimeMs,
+                    tasks = new[] { pair.Value }
+                });
+            }
+
+            BroadcastRoomSnapshot(room);
+        }
+
+        private DrawTelephoneTask BuildDrawTelephoneTask(
+            MockRoomRuntime room,
+            MockDrawTelephoneChainRuntime chain,
+            MockDrawTelephoneStageEntryRuntime entry)
+        {
+            var task = new DrawTelephoneTask
+            {
+                chainId = chain.ChainId,
+                stageIndex = entry.StageIndex,
+                actionType = entry.ActionType
+            };
+
+            if (string.Equals(entry.ActionType, DrawActionType, StringComparison.Ordinal))
+            {
+                task.promptWord = entry.StageIndex == 0
+                    ? chain.OriginalWordText
+                    : chain.Entries[entry.StageIndex - 1].GuessText;
+                return task;
+            }
+
+            var previousEntry = chain.Entries[entry.StageIndex - 1];
+            task.previousStrokeGroupId = previousEntry.StrokeGroupId;
+            task.previousCanvas = BuildCanvasData(room, previousEntry.StrokeGroupId);
+            return task;
+        }
+
+        private void HandleSubmitTelephoneDrawing(MockServerSession session, SubmitTelephoneDrawing request)
+        {
+            if (!TryGetCurrentTelephoneTask(session, DrawActionType, out var room, out var task)
+                || request == null
+                || !string.Equals(task.chainId, request.chainId, StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(request.strokeGroupId))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidState), session.RoomId);
+                return;
+            }
+
+            var chain = FindChain(room, request.chainId);
+            if (chain == null)
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidState), session.RoomId);
+                return;
+            }
+
+            if (!room.StrokeGroups.ContainsKey(request.strokeGroupId))
+            {
+                room.StrokeGroups[request.strokeGroupId] = new MockStrokeGroupRuntime
+                {
+                    StrokeGroupId = request.strokeGroupId,
+                    PlayerId = session.PlayerId,
+                    ChainId = request.chainId,
+                    StageIndex = room.CurrentStageIndex
+                };
+            }
+
+            var entry = chain.Entries[room.CurrentStageIndex];
+            entry.StrokeGroupId = request.strokeGroupId;
+            entry.SubmittedTimeMs = MockMiniGameTime.NowMs;
+            room.SubmittedPlayers[session.PlayerId] = true;
+
+            AdvanceIfAllSubmitted(room);
+        }
+
+        private void HandleSubmitTelephoneGuess(MockServerSession session, SubmitTelephoneGuess request)
+        {
+            if (!TryGetCurrentTelephoneTask(session, GuessActionType, out var room, out var task)
+                || request == null
+                || !string.Equals(task.chainId, request.chainId, StringComparison.Ordinal))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidState), session.RoomId);
+                return;
+            }
+
+            var chain = FindChain(room, request.chainId);
+            if (chain == null)
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidState), session.RoomId);
+                return;
+            }
+
+            var entry = chain.Entries[room.CurrentStageIndex];
+            entry.GuessText = request.guessText?.Trim();
+            entry.SubmittedTimeMs = MockMiniGameTime.NowMs;
+            room.SubmittedPlayers[session.PlayerId] = true;
+
+            AdvanceIfAllSubmitted(room);
+        }
+
+        private void HandleStrokePointBatch(MockServerSession session, StrokePointBatch batch)
+        {
+            if (batch == null
+                || !session.UdpBound
+                || !TryGetCurrentTelephoneTask(session, DrawActionType, out var room, out var task)
+                || !string.Equals(batch.roomId, room.RoomId, StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(batch.strokeId))
+            {
+                return;
+            }
+
+            if (!room.StrokeGroups.TryGetValue(batch.strokeId, out var group))
+            {
+                group = new MockStrokeGroupRuntime
+                {
+                    StrokeGroupId = batch.strokeId,
+                    PlayerId = session.PlayerId,
+                    ChainId = task.chainId,
+                    StageIndex = task.stageIndex
+                };
+                room.StrokeGroups.Add(batch.strokeId, group);
+            }
+
+            if (!string.Equals(group.PlayerId, session.PlayerId, StringComparison.Ordinal)
+                || !string.Equals(group.ChainId, task.chainId, StringComparison.Ordinal)
+                || group.StageIndex != task.stageIndex)
+            {
+                return;
+            }
+
+            AddStrokePoints(group, batch.strokeId, batch.points);
+        }
+
+        private bool TryGetCurrentTelephoneTask(
+            MockServerSession session,
+            string requiredActionType,
+            out MockRoomRuntime room,
+            out DrawTelephoneTask task)
+        {
+            room = null;
+            task = null;
+
+            if (session == null
+                || string.IsNullOrWhiteSpace(session.RoomId)
+                || !_rooms.TryGetValue(session.RoomId, out room)
+                || !room.CurrentTasks.TryGetValue(session.PlayerId, out task))
+            {
+                return false;
+            }
+
+            return string.Equals(task.actionType, requiredActionType, StringComparison.Ordinal);
+        }
+
+        private void AdvanceIfAllSubmitted(MockRoomRuntime room)
+        {
+            foreach (var pair in room.CurrentTasks)
+            {
+                if (!room.SubmittedPlayers.TryGetValue(pair.Key, out var submitted) || !submitted)
+                {
+                    return;
+                }
+            }
+
+            AdvanceDrawTelephoneStage(room, true);
+        }
+
+        private void StartDrawTelephoneReview(MockRoomRuntime room)
+        {
+            room.State = nameof(MiniGameRoomState.Review);
+            room.CurrentActionType = null;
+            room.CurrentTasks.Clear();
+            room.SubmittedPlayers.Clear();
+            room.StateEnterTimeMs = MockMiniGameTime.NowMs;
+            room.StateDeadlineTimeMs = 0L;
+
+            var chains = new DrawTelephoneChainState[room.Chains.Count];
+            for (var i = 0; i < room.Chains.Count; i++)
+            {
+                chains[i] = BuildChainState(room.Chains[i]);
+            }
+
+            BroadcastReliableToRoom(room.RoomId, MessageType.DrawTelephoneReviewStarted, new DrawTelephoneReviewStarted
+            {
+                chains = chains,
+                reviewSecondsPerChain = MockReviewSecondsPerChain
+            });
+            BroadcastRoomSnapshot(room);
+        }
+
+        private static DrawTelephoneChainState BuildChainState(MockDrawTelephoneChainRuntime chain)
+        {
+            var entries = new DrawTelephoneStageEntry[chain.Entries.Length];
+            for (var i = 0; i < chain.Entries.Length; i++)
+            {
+                var source = chain.Entries[i];
+                entries[i] = new DrawTelephoneStageEntry
+                {
+                    stageIndex = source.StageIndex,
+                    playerId = source.PlayerId,
+                    actionType = source.ActionType,
+                    strokeGroupId = source.StrokeGroupId,
+                    guessText = source.GuessText,
+                    submittedTimeMs = source.SubmittedTimeMs,
+                    isTimeoutSubmit = source.IsTimeoutSubmit
+                };
+            }
+
+            var finalGuess = entries.Length > 0 ? entries[entries.Length - 1].guessText : null;
+            return new DrawTelephoneChainState
+            {
+                chainId = chain.ChainId,
+                originalWordId = chain.OriginalWordId,
+                starterPlayerId = chain.StarterPlayerId,
+                entries = entries,
+                finalGuessText = finalGuess,
+                score = string.Equals(chain.OriginalWordText, finalGuess, StringComparison.OrdinalIgnoreCase) ? 100 : 0
+            };
+        }
+
+        private static MockDrawTelephoneChainRuntime FindChain(MockRoomRuntime room, string chainId)
+        {
+            for (var i = 0; i < room.Chains.Count; i++)
+            {
+                if (string.Equals(room.Chains[i].ChainId, chainId, StringComparison.Ordinal))
+                {
+                    return room.Chains[i];
+                }
+            }
+
+            return null;
+        }
+
+        private static DrawTelephoneCanvasData BuildCanvasData(MockRoomRuntime room, string strokeGroupId)
+        {
+            if (string.IsNullOrWhiteSpace(strokeGroupId)
+                || !room.StrokeGroups.TryGetValue(strokeGroupId, out var group))
+            {
+                return null;
+            }
+
+            var strokes = new DrawTelephoneStrokeData[group.Strokes.Count];
+            for (var i = 0; i < group.Strokes.Count; i++)
+            {
+                strokes[i] = new DrawTelephoneStrokeData
+                {
+                    strokeId = group.Strokes[i].strokeId,
+                    points = ClonePoints(group.Strokes[i].points)
+                };
+            }
+
+            return new DrawTelephoneCanvasData
+            {
+                strokeGroupId = strokeGroupId,
+                strokes = strokes
+            };
+        }
+
+        private static void AddStrokePoints(MockStrokeGroupRuntime group, string strokeId, DrawPointData[] points)
+        {
+            if (group == null || points == null || points.Length == 0)
+            {
+                return;
+            }
+
+            DrawTelephoneStrokeData stroke = null;
+            for (var i = 0; i < group.Strokes.Count; i++)
+            {
+                if (string.Equals(group.Strokes[i].strokeId, strokeId, StringComparison.Ordinal))
+                {
+                    stroke = group.Strokes[i];
+                    break;
+                }
+            }
+
+            if (stroke == null)
+            {
+                group.Strokes.Add(new DrawTelephoneStrokeData
+                {
+                    strokeId = strokeId,
+                    points = ClonePoints(points)
+                });
+                return;
+            }
+
+            var oldLength = stroke.points?.Length ?? 0;
+            var merged = new DrawPointData[oldLength + points.Length];
+            if (oldLength > 0)
+            {
+                Array.Copy(stroke.points, merged, oldLength);
+            }
+
+            var cloned = ClonePoints(points);
+            Array.Copy(cloned, 0, merged, oldLength, cloned.Length);
+            stroke.points = merged;
+        }
+
+        private static DrawPointData[] ClonePoints(DrawPointData[] points)
+        {
+            if (points == null || points.Length == 0)
+            {
+                return new DrawPointData[0];
+            }
+
+            var result = new DrawPointData[points.Length];
+            for (var i = 0; i < points.Length; i++)
+            {
+                var point = points[i];
+                if (point == null)
+                {
+                    continue;
+                }
+
+                result[i] = new DrawPointData
+                {
+                    x = point.x,
+                    y = point.y,
+                    pressure = point.pressure,
+                    timeMs = point.timeMs
+                };
+            }
+
+            return result;
+        }
+
+        private static void ShufflePlayerIds(List<string> playerIds, long seed)
+        {
+            var random = new Random(unchecked((int)(seed ^ (seed >> 32))));
+            for (var i = playerIds.Count - 1; i > 0; i--)
+            {
+                var swapIndex = random.Next(i + 1);
+                var temp = playerIds[i];
+                playerIds[i] = playerIds[swapIndex];
+                playerIds[swapIndex] = temp;
+            }
+        }
+
+        private static string MockWordText(int index)
+        {
+            switch (index % 6)
+            {
+                case 0: return "石狮";
+                case 1: return "灯笼";
+                case 2: return "瓦当";
+                case 3: return "牌楼";
+                case 4: return "铜钱";
+                default: return "竹简";
+            }
+        }
+
         private void BroadcastPlayerJoined(MockRoomRuntime room, MockServerSession session)
         {
             BroadcastReliableToRoom(room.RoomId, MessageType.PlayerJoined, new PlayerJoined
@@ -384,7 +878,31 @@ namespace NiumaMiniGame.Mock
             BroadcastReliableToRoom(room.RoomId, MessageType.RoomSnapshot, BuildSnapshot(room));
         }
 
-        private RoomSnapshot BuildSnapshot(MockRoomRuntime room)
+        private void SendReliableToPlayer<TMessage>(
+            MockRoomRuntime room,
+            string playerId,
+            string messageType,
+            TMessage payload)
+            where TMessage : IRealtimeMessage
+        {
+            if (room == null || string.IsNullOrWhiteSpace(playerId))
+            {
+                return;
+            }
+
+            foreach (var session in _sessions.Values)
+            {
+                if (session.Connected
+                    && string.Equals(session.RoomId, room.RoomId, StringComparison.Ordinal)
+                    && string.Equals(session.PlayerId, playerId, StringComparison.Ordinal))
+                {
+                    session.Client.EnqueueReliable(messageType, payload, room.RoomId);
+                    return;
+                }
+            }
+        }
+
+        private RoomSnapshot BuildSnapshot(MockRoomRuntime room, string playerId = null)
         {
             var players = new RoomPlayerSnapshot[room.Players.Count];
             var scores = new ScoreEntry[room.Players.Count];
@@ -420,7 +938,10 @@ namespace NiumaMiniGame.Mock
                 stateEnterTimeMs = room.StateEnterTimeMs,
                 stateDeadlineTimeMs = room.StateDeadlineTimeMs,
                 players = players,
-                scores = scores
+                scores = scores,
+                currentTask = !string.IsNullOrWhiteSpace(playerId) && room.CurrentTasks.TryGetValue(playerId, out var task)
+                    ? task
+                    : null
             };
         }
 

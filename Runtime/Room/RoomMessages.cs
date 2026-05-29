@@ -1,5 +1,6 @@
 using System;
 using NiumaMiniGame.Protocol;
+using NiumaMiniGame.Telephone;
 
 namespace NiumaMiniGame.Room
 {
@@ -103,6 +104,7 @@ namespace NiumaMiniGame.Room
         public long stateDeadlineTimeMs;
         public RoomPlayerSnapshot[] players;
         public ScoreEntry[] scores;
+        public DrawTelephoneTask currentTask;
     }
 
     [Serializable]

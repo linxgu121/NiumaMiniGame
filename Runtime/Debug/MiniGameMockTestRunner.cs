@@ -6,12 +6,13 @@ using NiumaMiniGame.Mock;
 using NiumaMiniGame.Network;
 using NiumaMiniGame.Protocol;
 using NiumaMiniGame.Room;
+using NiumaMiniGame.Telephone;
 using UnityEngine;
 
 namespace NiumaMiniGame.Debugging
 {
     /// <summary>
-    /// MiniGame 第二阶段 Mock 流程测试。
+    /// MiniGame Mock 流程测试入口。
     /// 挂到任意 GameObject 后，通过右键菜单运行。
     /// </summary>
     public sealed class MiniGameMockTestRunner : MonoBehaviour
@@ -91,6 +92,127 @@ namespace NiumaMiniGame.Debugging
             Debug.Log($"[NiumaMiniGame][阶段2] Mock 基础测试通过：Passed={passed}, Failed=0", this);
         }
 
+        [ContextMenu("NiumaMiniGame/阶段3/运行 DrawTelephone Mock 流程测试")]
+        public void RunDrawTelephoneMockFlowTests()
+        {
+            var failed = 0;
+            var passed = 0;
+            MockRoomServer.Shared.Reset();
+
+            var clients = new[]
+            {
+                CreateClient("player-a", "甲"),
+                CreateClient("player-b", "乙"),
+                CreateClient("player-c", "丙"),
+                CreateClient("player-d", "丁")
+            };
+
+            for (var i = 0; i < clients.Length; i++)
+            {
+                Expect(DrainUntil<ConnectAccepted>(clients[i], MessageType.ConnectAccepted, out _), $"玩家 {i + 1} 收到连接确认", ref passed, ref failed);
+            }
+
+            clients[0].SendReliable(new CreateRoomRequest
+            {
+                modeId = "draw_telephone",
+                displayName = "甲"
+            });
+
+            Expect(DrainUntil<CreateRoomResult>(clients[0], MessageType.CreateRoomResult, out var createResult), "房主收到建房结果", ref passed, ref failed);
+            Expect(createResult != null && createResult.succeeded, "建房成功", ref passed, ref failed);
+
+            var roomId = createResult?.roomId;
+            var udpTokens = new string[clients.Length];
+            udpTokens[0] = createResult?.udpBindToken;
+
+            for (var i = 1; i < clients.Length; i++)
+            {
+                clients[i].SendReliable(new JoinRoomRequest
+                {
+                    roomId = roomId,
+                    displayName = $"玩家{i + 1}"
+                });
+                Expect(DrainUntil<JoinRoomResult>(clients[i], MessageType.JoinRoomResult, out var joinResult), $"玩家 {i + 1} 收到加房结果", ref passed, ref failed);
+                Expect(joinResult != null && joinResult.succeeded, $"玩家 {i + 1} 加房成功", ref passed, ref failed);
+                udpTokens[i] = joinResult?.udpBindToken;
+            }
+
+            for (var i = 0; i < clients.Length; i++)
+            {
+                clients[i].SendReliable(new UdpBindRequest
+                {
+                    roomId = roomId,
+                    playerId = clients[i].ClientId,
+                    sessionId = clients[i].SessionId,
+                    udpBindToken = udpTokens[i]
+                });
+                Expect(DrainUntil<UdpBindAccepted>(clients[i], MessageType.UdpBindAccepted, out var bindResult), $"玩家 {i + 1} 收到 UDP 绑定结果", ref passed, ref failed);
+                Expect(bindResult != null && bindResult.succeeded, $"玩家 {i + 1} UDP 绑定成功", ref passed, ref failed);
+            }
+
+            for (var i = 0; i < clients.Length; i++)
+            {
+                clients[i].SendReliable(new PlayerReadyRequest { ready = true });
+            }
+
+            Expect(DrainUntil<DrawTelephoneStarted>(clients[0], MessageType.DrawTelephoneStarted, out var started), "收到 DrawTelephoneStarted", ref passed, ref failed);
+            Expect(started != null && started.stageCount == clients.Length, "阶段数量等于玩家数量", ref passed, ref failed);
+
+            for (var stageIndex = 0; stageIndex < clients.Length; stageIndex++)
+            {
+                var actionType = stageIndex % 2 == 0 ? "DRAW" : "GUESS";
+                for (var i = 0; i < clients.Length; i++)
+                {
+                    Expect(DrainUntilPersonalStage(clients[i], stageIndex, actionType, out var stage), $"玩家 {i + 1} 收到第 {stageIndex} 阶段个人任务", ref passed, ref failed);
+
+                    var task = stage?.tasks != null && stage.tasks.Length > 0 ? stage.tasks[0] : null;
+                    Expect(task != null && !string.IsNullOrWhiteSpace(task.chainId), $"玩家 {i + 1} 任务链有效", ref passed, ref failed);
+
+                    if (string.Equals(actionType, "DRAW", StringComparison.Ordinal))
+                    {
+                        Expect(!string.IsNullOrWhiteSpace(task?.promptWord), $"玩家 {i + 1} 绘画提示有效", ref passed, ref failed);
+                        var strokeId = $"stroke_{stageIndex}_{clients[i].ClientId}";
+                        clients[i].SendUnreliable(new StrokePointBatch
+                        {
+                            roomId = roomId,
+                            strokeId = strokeId,
+                            strokeSequence = 0,
+                            points = new[]
+                            {
+                                new DrawPointData { x = 0.2f, y = 0.2f, pressure = 1f, timeMs = MockMiniGameTime.NowMs },
+                                new DrawPointData { x = 0.8f, y = 0.8f, pressure = 1f, timeMs = MockMiniGameTime.NowMs + 16L }
+                            }
+                        });
+                        clients[i].SendReliable(new SubmitTelephoneDrawing
+                        {
+                            chainId = task.chainId,
+                            strokeGroupId = strokeId
+                        });
+                    }
+                    else
+                    {
+                        Expect(task?.previousCanvas != null && task.previousCanvas.strokes != null && task.previousCanvas.strokes.Length > 0, $"玩家 {i + 1} 猜词阶段收到上一轮画布", ref passed, ref failed);
+                        clients[i].SendReliable(new SubmitTelephoneGuess
+                        {
+                            chainId = task.chainId,
+                            guessText = $"猜词_{stageIndex}_{i}"
+                        });
+                    }
+                }
+            }
+
+            Expect(DrainUntil<DrawTelephoneReviewStarted>(clients[0], MessageType.DrawTelephoneReviewStarted, out var review), "收到 ReviewStarted", ref passed, ref failed);
+            Expect(review != null && review.chains != null && review.chains.Length == clients.Length, "Review 包含所有传话链", ref passed, ref failed);
+
+            if (failed > 0)
+            {
+                Debug.LogError($"[NiumaMiniGame][阶段3] DrawTelephone Mock 流程测试失败：Passed={passed}, Failed={failed}", this);
+                return;
+            }
+
+            Debug.Log($"[NiumaMiniGame][阶段3] DrawTelephone Mock 流程测试通过：Passed={passed}, Failed=0", this);
+        }
+
         private static MockRealtimeNetworkClient CreateClient(string playerId, string displayName)
         {
             var client = new MockRealtimeNetworkClient(MockRoomServer.Shared);
@@ -104,7 +226,7 @@ namespace NiumaMiniGame.Debugging
             out TMessage payload)
             where TMessage : class, IRealtimeMessage
         {
-            for (var i = 0; i < 64; i++)
+            for (var i = 0; i < 128; i++)
             {
                 if (!client.TryDequeueMessage(out var inbound))
                 {
@@ -122,6 +244,42 @@ namespace NiumaMiniGame.Debugging
             return false;
         }
 
+        private static bool DrainUntilPersonalStage(
+            MockRealtimeNetworkClient client,
+            int stageIndex,
+            string actionType,
+            out DrawTelephoneStageStarted stage)
+        {
+            for (var i = 0; i < 128; i++)
+            {
+                if (!client.TryDequeueMessage(out var inbound))
+                {
+                    break;
+                }
+
+                if (!string.Equals(inbound.MessageType, MessageType.DrawTelephoneStageStarted, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var payload = JsonUtility.FromJson<DrawTelephoneStageStarted>(inbound.PayloadJson);
+                if (payload == null
+                    || payload.stageIndex != stageIndex
+                    || !string.Equals(payload.actionType, actionType, StringComparison.Ordinal)
+                    || payload.tasks == null
+                    || payload.tasks.Length == 0)
+                {
+                    continue;
+                }
+
+                stage = payload;
+                return true;
+            }
+
+            stage = null;
+            return false;
+        }
+
         private static void DrainAll(MockRealtimeNetworkClient client)
         {
             while (client.TryDequeueMessage(out _))
@@ -136,14 +294,14 @@ namespace NiumaMiniGame.Debugging
                 passed++;
                 if (logPassedChecks)
                 {
-                    Debug.Log($"[NiumaMiniGame][阶段2] 通过：{label}", this);
+                    Debug.Log($"[NiumaMiniGame] 通过：{label}", this);
                 }
 
                 return;
             }
 
             failed++;
-            Debug.LogError($"[NiumaMiniGame][阶段2] 失败：{label}", this);
+            Debug.LogError($"[NiumaMiniGame] 失败：{label}", this);
         }
     }
 }

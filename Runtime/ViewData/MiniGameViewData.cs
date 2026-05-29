@@ -1,4 +1,5 @@
 using System;
+using NiumaMiniGame.Drawing;
 using NiumaMiniGame.Enum;
 using NiumaMiniGame.Telephone;
 
@@ -50,7 +51,22 @@ namespace NiumaMiniGame.ViewData
         public string PromptWord;
         public string PreviousGuess;
         public string PreviousStrokeGroupId;
+        public DrawTelephoneCanvasViewData PreviousCanvas;
         public float RemainingSeconds;
+    }
+
+    [Serializable]
+    public sealed class DrawTelephoneCanvasViewData
+    {
+        public string StrokeGroupId;
+        public DrawTelephoneStrokeViewData[] Strokes;
+    }
+
+    [Serializable]
+    public sealed class DrawTelephoneStrokeViewData
+    {
+        public string StrokeId;
+        public DrawPointData[] Points;
     }
 
     [Serializable]
