@@ -1,0 +1,17 @@
+{
+  "name": "NiumaMiniGame.GalBridge",
+  "references": [
+    "NiumaMiniGame.Runtime",
+    "NiumaGal.Runtime",
+    "Unity.TextMeshPro",
+    "Unity.ugui"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": []
+}
