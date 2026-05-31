@@ -38,6 +38,13 @@ namespace NiumaMiniGame.GalBridge
         [Tooltip("为 true 时，按钮缺失或场景缺少 EventSystem 会输出警告。")]
         [SerializeField] private bool logWarnings = true;
 
+        [Header("鼠标控制")]
+        [Tooltip("为 true 时，入口面板显示期间会临时显示并解锁鼠标，避免 TPC 隐藏鼠标导致按钮无法点击。")]
+        [SerializeField] private bool unlockCursorWhileVisible = true;
+
+        [Tooltip("为 true 时，面板关闭后恢复打开面板前的鼠标显示与锁定状态。")]
+        [SerializeField] private bool restoreCursorOnHide = true;
+
         [Header("默认文案")]
         [Tooltip("面板默认标题。")]
         [SerializeField] private string defaultTitle = "要进入你画我猜吗？";
@@ -50,6 +57,9 @@ namespace NiumaMiniGame.GalBridge
 
         private readonly UnityEvent _onEnter = new UnityEvent();
         private readonly UnityEvent _onCancel = new UnityEvent();
+        private CursorLockMode _previousLockMode;
+        private bool _previousCursorVisible;
+        private bool _hasCursorSnapshot;
 
         public UnityEvent OnEnter => _onEnter;
         public UnityEvent OnCancel => _onCancel;
@@ -86,6 +96,7 @@ namespace NiumaMiniGame.GalBridge
 
         public void Show(string title, string enterText, string cancelText)
         {
+            ApplyVisibleCursorState();
             EnsurePanelRoot();
             ResolveControls(true);
             BindButtons();
@@ -107,6 +118,8 @@ namespace NiumaMiniGame.GalBridge
             {
                 panelRoot.SetActive(false);
             }
+
+            RestoreCursorState();
         }
 
         private void EnsurePanelRoot()
@@ -181,6 +194,36 @@ namespace NiumaMiniGame.GalBridge
             {
                 Debug.LogWarning("[MiniGameDialogueChoicePanel] 当前场景没有 EventSystem，Unity UI Button 无法响应点击。请创建 UI/EventSystem。", this);
             }
+        }
+
+        private void ApplyVisibleCursorState()
+        {
+            if (!unlockCursorWhileVisible)
+            {
+                return;
+            }
+
+            if (!_hasCursorSnapshot)
+            {
+                _previousLockMode = Cursor.lockState;
+                _previousCursorVisible = Cursor.visible;
+                _hasCursorSnapshot = true;
+            }
+
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        private void RestoreCursorState()
+        {
+            if (!unlockCursorWhileVisible || !restoreCursorOnHide || !_hasCursorSnapshot)
+            {
+                return;
+            }
+
+            Cursor.lockState = _previousLockMode;
+            Cursor.visible = _previousCursorVisible;
+            _hasCursorSnapshot = false;
         }
 
         private void HandleEnterClicked()
