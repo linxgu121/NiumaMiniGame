@@ -65,6 +65,7 @@ namespace NiumaMiniGame.Controller
         public bool IsConnected => _networkClient != null && _networkClient.IsConnected;
         public string LocalPlayerId => _networkClient != null ? _networkClient.ClientId : _blackboard.LocalPlayerId;
         public string SessionId => _networkClient != null ? _networkClient.SessionId : _blackboard.SessionId;
+        public string DisplayName => displayName;
 
         private void Awake()
         {
@@ -113,6 +114,23 @@ namespace NiumaMiniGame.Controller
                 enableUdp));
             Tick(0f);
             return _networkClient.IsConnected;
+        }
+
+        /// <summary>
+        /// 设置房间内显示昵称。UI 开始界面在创建或加入房间前调用。
+        /// 已连接后只影响后续请求，不会自动向服务器同步改名。
+        /// </summary>
+        public void SetDisplayName(string value)
+        {
+            displayName = MiniGameIdentityUtility.NormalizeDisplayName(value);
+        }
+
+        /// <summary>
+        /// 设置本地玩家 ID。第一版主要用于调试；正式接入账号系统后应由 Auth 层提供。
+        /// </summary>
+        public void SetPlayerId(string value)
+        {
+            playerId = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
 
         public void Disconnect(string reason = "UserDisconnect")

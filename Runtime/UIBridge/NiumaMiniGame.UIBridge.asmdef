@@ -1,0 +1,16 @@
+{
+  "name": "NiumaMiniGame.UIBridge",
+  "references": [
+    "NiumaMiniGame.Runtime",
+    "Unity.TextMeshPro",
+    "Unity.ugui"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": []
+}
