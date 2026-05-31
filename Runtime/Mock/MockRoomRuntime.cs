@@ -19,8 +19,10 @@ namespace NiumaMiniGame.Mock
         public string CurrentActionType;
         public long RoomSeed;
         public readonly Dictionary<string, MockRoomPlayerRuntime> Players = new Dictionary<string, MockRoomPlayerRuntime>();
+        public readonly Dictionary<string, MockRoomPlayerRuntime> Viewers = new Dictionary<string, MockRoomPlayerRuntime>();
         public readonly Dictionary<string, DrawTelephoneTask> CurrentTasks = new Dictionary<string, DrawTelephoneTask>();
         public readonly Dictionary<string, bool> SubmittedPlayers = new Dictionary<string, bool>();
+        public readonly Dictionary<string, Dictionary<string, int>> ChainVotes = new Dictionary<string, Dictionary<string, int>>();
         public readonly List<MockDrawTelephoneChainRuntime> Chains = new List<MockDrawTelephoneChainRuntime>();
         public readonly Dictionary<string, MockStrokeGroupRuntime> StrokeGroups = new Dictionary<string, MockStrokeGroupRuntime>();
     }
@@ -31,6 +33,7 @@ namespace NiumaMiniGame.Mock
         public string DisplayName;
         public bool Ready;
         public bool Connected;
+        public bool IsViewer;
         public int Score = 0;
     }
 
@@ -41,6 +44,7 @@ namespace NiumaMiniGame.Mock
         public string DisplayName;
         public string RoomId;
         public bool Connected;
+        public bool IsViewer;
         public bool UdpBound;
         public MockRealtimeNetworkClient Client;
     }

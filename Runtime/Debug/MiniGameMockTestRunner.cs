@@ -29,11 +29,14 @@ namespace NiumaMiniGame.Debugging
 
             var host = CreateClient("player-a", "甲");
             var guest = CreateClient("player-b", "乙");
+            var viewer = CreateClient("viewer-a", "观战者");
 
             Expect(host.IsConnected, "房主连接成功", ref passed, ref failed);
             Expect(guest.IsConnected, "成员连接成功", ref passed, ref failed);
+            Expect(viewer.IsConnected, "观战者连接成功", ref passed, ref failed);
             Expect(DrainUntil<ConnectAccepted>(host, MessageType.ConnectAccepted, out _), "房主收到 ConnectAccepted", ref passed, ref failed);
             Expect(DrainUntil<ConnectAccepted>(guest, MessageType.ConnectAccepted, out _), "成员收到 ConnectAccepted", ref passed, ref failed);
+            Expect(DrainUntil<ConnectAccepted>(viewer, MessageType.ConnectAccepted, out _), "观战者收到 ConnectAccepted", ref passed, ref failed);
 
             host.SendReliable(new CreateRoomRequest
             {
@@ -54,12 +57,23 @@ namespace NiumaMiniGame.Debugging
             Expect(DrainUntil<JoinRoomResult>(guest, MessageType.JoinRoomResult, out var joinResult), "成员收到加房结果", ref passed, ref failed);
             Expect(joinResult != null && joinResult.succeeded, "加房成功", ref passed, ref failed);
 
+            viewer.SendReliable(new JoinRoomRequest
+            {
+                roomId = roomId,
+                displayName = "观战者",
+                viewer = true
+            });
+
+            Expect(DrainUntil<JoinRoomResult>(viewer, MessageType.JoinRoomResult, out var viewerJoinResult), "观战者收到加房结果", ref passed, ref failed);
+            Expect(viewerJoinResult != null && viewerJoinResult.succeeded, "观战者加房成功", ref passed, ref failed);
+
             host.SendReliable(new PlayerReadyRequest { ready = true });
             guest.SendReliable(new PlayerReadyRequest { ready = true });
 
             DrainAll(host);
-            Expect(DrainUntil<RoomSnapshot>(guest, MessageType.RoomSnapshot, out var snapshot), "成员收到房间快照", ref passed, ref failed);
+            Expect(DrainLatest<RoomSnapshot>(guest, MessageType.RoomSnapshot, out var snapshot), "成员收到房间快照", ref passed, ref failed);
             Expect(snapshot != null && snapshot.players != null && snapshot.players.Length == 2, "房间快照包含两名玩家", ref passed, ref failed);
+            Expect(snapshot != null && snapshot.viewers != null && snapshot.viewers.Length == 1, "房间快照包含一名观战者", ref passed, ref failed);
 
             guest.SendReliable(new SendRoomChatRequest { text = "测试聊天" });
             Expect(DrainUntil<RoomChatMessage>(host, MessageType.RoomChatMessage, out var chat), "房主收到聊天广播", ref passed, ref failed);
@@ -106,11 +120,13 @@ namespace NiumaMiniGame.Debugging
                 CreateClient("player-c", "丙"),
                 CreateClient("player-d", "丁")
             };
+            var viewer = CreateClient("viewer-a", "观战者");
 
             for (var i = 0; i < clients.Length; i++)
             {
                 Expect(DrainUntil<ConnectAccepted>(clients[i], MessageType.ConnectAccepted, out _), $"玩家 {i + 1} 收到连接确认", ref passed, ref failed);
             }
+            Expect(DrainUntil<ConnectAccepted>(viewer, MessageType.ConnectAccepted, out _), "观战者收到连接确认", ref passed, ref failed);
 
             clients[0].SendReliable(new CreateRoomRequest
             {
@@ -137,6 +153,16 @@ namespace NiumaMiniGame.Debugging
                 udpTokens[i] = joinResult?.udpBindToken;
             }
 
+            viewer.SendReliable(new JoinRoomRequest
+            {
+                roomId = roomId,
+                displayName = "观战者",
+                viewer = true
+            });
+            Expect(DrainUntil<JoinRoomResult>(viewer, MessageType.JoinRoomResult, out var viewerJoinResult), "观战者收到加房结果", ref passed, ref failed);
+            Expect(viewerJoinResult != null && viewerJoinResult.succeeded, "观战者加房成功", ref passed, ref failed);
+            var viewerUdpToken = viewerJoinResult?.udpBindToken;
+
             for (var i = 0; i < clients.Length; i++)
             {
                 clients[i].SendReliable(new UdpBindRequest
@@ -149,6 +175,16 @@ namespace NiumaMiniGame.Debugging
                 Expect(DrainUntil<UdpBindAccepted>(clients[i], MessageType.UdpBindAccepted, out var bindResult), $"玩家 {i + 1} 收到 UDP 绑定结果", ref passed, ref failed);
                 Expect(bindResult != null && bindResult.succeeded, $"玩家 {i + 1} UDP 绑定成功", ref passed, ref failed);
             }
+
+            viewer.SendReliable(new UdpBindRequest
+            {
+                roomId = roomId,
+                playerId = viewer.ClientId,
+                sessionId = viewer.SessionId,
+                udpBindToken = viewerUdpToken
+            });
+            Expect(DrainUntil<UdpBindAccepted>(viewer, MessageType.UdpBindAccepted, out var viewerBindResult), "观战者收到 UDP 绑定结果", ref passed, ref failed);
+            Expect(viewerBindResult != null && viewerBindResult.succeeded, "观战者 UDP 绑定成功", ref passed, ref failed);
 
             for (var i = 0; i < clients.Length; i++)
             {
@@ -183,6 +219,12 @@ namespace NiumaMiniGame.Debugging
                                 new DrawPointData { x = 0.8f, y = 0.8f, pressure = 1f, timeMs = MockMiniGameTime.NowMs + 16L }
                             }
                         });
+                        if (stageIndex == 0 && i == 0)
+                        {
+                            Expect(DrainUntil<StrokePointBatch>(viewer, MessageType.StrokePointBatch, out var viewerStroke), "观战者收到绘画点位转发", ref passed, ref failed);
+                            Expect(viewerStroke != null && string.Equals(viewerStroke.strokeId, strokeId, StringComparison.Ordinal), "观战者点位来自当前绘画笔画", ref passed, ref failed);
+                        }
+
                         clients[i].SendReliable(new SubmitTelephoneDrawing
                         {
                             chainId = task.chainId,
@@ -203,6 +245,38 @@ namespace NiumaMiniGame.Debugging
 
             Expect(DrainUntil<DrawTelephoneReviewStarted>(clients[0], MessageType.DrawTelephoneReviewStarted, out var review), "收到 ReviewStarted", ref passed, ref failed);
             Expect(review != null && review.chains != null && review.chains.Length == clients.Length, "Review 包含所有传话链", ref passed, ref failed);
+
+            Expect(DrainUntil<DrawTelephoneVotingStarted>(clients[0], MessageType.DrawTelephoneVotingStarted, out var voting), "收到 VotingStarted", ref passed, ref failed);
+            Expect(voting != null && voting.chains != null && voting.chains.Length == clients.Length, "投票阶段包含所有传话链", ref passed, ref failed);
+            Expect(voting?.chains != null && !string.IsNullOrWhiteSpace(voting.chains[0].originalWord), "投票信息包含原词", ref passed, ref failed);
+
+            for (var voterIndex = 0; voterIndex < clients.Length; voterIndex++)
+            {
+                if (voting?.chains == null)
+                {
+                    break;
+                }
+
+                for (var chainIndex = 0; chainIndex < voting.chains.Length; chainIndex++)
+                {
+                    var chain = voting.chains[chainIndex];
+                    if (chain == null || string.Equals(chain.starterPlayerId, clients[voterIndex].ClientId, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    clients[voterIndex].SendReliable(new SubmitChainVote
+                    {
+                        chainId = chain.chainId,
+                        score = 60 + voterIndex + chainIndex
+                    });
+                }
+            }
+
+            Expect(DrainUntil<DrawTelephoneVotingEnded>(clients[0], MessageType.DrawTelephoneVotingEnded, out var votingEnded), "收到 VotingEnded", ref passed, ref failed);
+            Expect(votingEnded != null && votingEnded.results != null && votingEnded.results.Length == clients.Length, "投票结果包含所有传话链", ref passed, ref failed);
+            Expect(DrainUntil<GameEnded>(clients[0], MessageType.GameEnded, out var gameEnded), "收到 GameEnded", ref passed, ref failed);
+            Expect(gameEnded != null && gameEnded.finalScores != null && gameEnded.finalScores.Length == clients.Length, "结算包含所有玩家分数", ref passed, ref failed);
 
             if (failed > 0)
             {
@@ -242,6 +316,40 @@ namespace NiumaMiniGame.Debugging
 
             payload = null;
             return false;
+        }
+
+        private static bool DrainLatest<TMessage>(
+            MockRealtimeNetworkClient client,
+            string messageType,
+            out TMessage payload)
+            where TMessage : class, IRealtimeMessage
+        {
+            payload = null;
+            var found = false;
+
+            for (var i = 0; i < 128; i++)
+            {
+                if (!client.TryDequeueMessage(out var inbound))
+                {
+                    break;
+                }
+
+                if (!string.Equals(inbound.MessageType, messageType, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var candidate = JsonUtility.FromJson<TMessage>(inbound.PayloadJson);
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                payload = candidate;
+                found = true;
+            }
+
+            return found;
         }
 
         private static bool DrainUntilPersonalStage(

@@ -22,6 +22,7 @@ namespace NiumaMiniGame.Mock
         private const float MockDrawStageSeconds = 90f;
         private const float MockGuessStageSeconds = 45f;
         private const float MockReviewSecondsPerChain = 8f;
+        private const float MockVotingDurationSeconds = 45f;
         private const string DrawActionType = "DRAW";
         private const string GuessActionType = "GUESS";
         private static readonly char[] RoomIdChars =
@@ -76,6 +77,13 @@ namespace NiumaMiniGame.Mock
                 player.Connected = false;
                 BroadcastRoomSnapshot(room);
             }
+            else if (!string.IsNullOrWhiteSpace(session.RoomId)
+                     && _rooms.TryGetValue(session.RoomId, out room)
+                     && room.Viewers.TryGetValue(session.PlayerId, out var viewer))
+            {
+                viewer.Connected = false;
+                BroadcastRoomSnapshot(room);
+            }
         }
 
         public void ReceiveReliable<TMessage>(string sessionId, TMessage message)
@@ -120,6 +128,9 @@ namespace NiumaMiniGame.Mock
                     break;
                 case SubmitTelephoneGuess request:
                     HandleSubmitTelephoneGuess(session, request);
+                    break;
+                case SubmitChainVote request:
+                    HandleSubmitChainVote(session, request);
                     break;
                 default:
                     session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidMessage));
@@ -201,7 +212,7 @@ namespace NiumaMiniGame.Mock
                 return;
             }
 
-            if (room.Players.Count >= 10 && !room.Players.ContainsKey(session.PlayerId))
+            if (!request.viewer && room.Players.Count >= 10 && !room.Players.ContainsKey(session.PlayerId))
             {
                 session.Client.EnqueueReliable(MessageType.JoinRoomResult, new JoinRoomResult
                 {
@@ -211,7 +222,26 @@ namespace NiumaMiniGame.Mock
                 return;
             }
 
-            AddOrReconnectPlayer(room, session, request.displayName);
+            if ((request.viewer && room.Players.ContainsKey(session.PlayerId))
+                || (!request.viewer && room.Viewers.ContainsKey(session.PlayerId)))
+            {
+                session.Client.EnqueueReliable(MessageType.JoinRoomResult, new JoinRoomResult
+                {
+                    succeeded = false,
+                    errorCode = nameof(MiniGameErrorCode.InvalidState)
+                }, room.RoomId);
+                return;
+            }
+
+            if (request.viewer)
+            {
+                AddOrReconnectViewer(room, session, request.displayName);
+            }
+            else
+            {
+                AddOrReconnectPlayer(room, session, request.displayName);
+            }
+
             session.Client.EnqueueReliable(MessageType.JoinRoomResult, new JoinRoomResult
             {
                 succeeded = true,
@@ -234,11 +264,36 @@ namespace NiumaMiniGame.Mock
 
             if (!room.Players.TryGetValue(session.PlayerId, out var player))
             {
+                if (!room.Viewers.TryGetValue(session.PlayerId, out player))
+                {
+                    return;
+                }
+
+                room.Viewers.Remove(session.PlayerId);
+                session.RoomId = null;
+                session.IsViewer = false;
+
+                BroadcastReliableToRoom(room.RoomId, MessageType.PlayerLeft, new PlayerLeft
+                {
+                    playerId = player.PlayerId,
+                    displayName = player.DisplayName
+                });
+
+                if (room.Players.Count == 0)
+                {
+                    _rooms.Remove(room.RoomId);
+                }
+                else
+                {
+                    BroadcastRoomSnapshot(room);
+                }
+
                 return;
             }
 
             room.Players.Remove(session.PlayerId);
             session.RoomId = null;
+            session.IsViewer = false;
 
             BroadcastReliableToRoom(room.RoomId, MessageType.PlayerLeft, new PlayerLeft
             {
@@ -342,25 +397,41 @@ namespace NiumaMiniGame.Mock
                 return;
             }
 
+            var isViewer = false;
             if (!room.Players.ContainsKey(request.playerId))
             {
-                session.Client.EnqueueReliable(MessageType.ReconnectResult, new ReconnectResult
+                if (!room.Viewers.ContainsKey(request.playerId))
                 {
-                    succeeded = false,
-                    errorCode = nameof(MiniGameErrorCode.PermissionDenied)
-                }, room.RoomId);
-                return;
+                    session.Client.EnqueueReliable(MessageType.ReconnectResult, new ReconnectResult
+                    {
+                        succeeded = false,
+                        errorCode = nameof(MiniGameErrorCode.PermissionDenied)
+                    }, room.RoomId);
+                    return;
+                }
+
+                isViewer = true;
             }
 
             session.PlayerId = request.playerId;
             session.RoomId = room.RoomId;
-            room.Players[request.playerId].Connected = true;
+            session.IsViewer = isViewer;
+            if (isViewer)
+            {
+                room.Viewers[request.playerId].Connected = true;
+            }
+            else
+            {
+                room.Players[request.playerId].Connected = true;
+            }
 
             session.Client.EnqueueReliable(MessageType.ReconnectResult, new ReconnectResult
             {
                 succeeded = true,
                 sessionId = session.SessionId,
-                snapshot = BuildSnapshot(room, request.playerId)
+                snapshot = BuildSnapshot(room, request.playerId),
+                udpBindToken = CreateUdpBindToken(room.RoomId, session.PlayerId),
+                udpPort = 0
             }, room.RoomId);
 
             BroadcastRoomSnapshot(room);
@@ -370,6 +441,7 @@ namespace NiumaMiniGame.Mock
         {
             session.DisplayName = MiniGameIdentityUtility.NormalizeDisplayName(displayName ?? session.DisplayName);
             session.RoomId = room.RoomId;
+            session.IsViewer = false;
 
             if (!room.Players.TryGetValue(session.PlayerId, out var player))
             {
@@ -382,6 +454,28 @@ namespace NiumaMiniGame.Mock
 
             player.DisplayName = session.DisplayName;
             player.Connected = true;
+            player.IsViewer = false;
+        }
+
+        private void AddOrReconnectViewer(MockRoomRuntime room, MockServerSession session, string displayName)
+        {
+            session.DisplayName = MiniGameIdentityUtility.NormalizeDisplayName(displayName ?? session.DisplayName);
+            session.RoomId = room.RoomId;
+            session.IsViewer = true;
+
+            if (!room.Viewers.TryGetValue(session.PlayerId, out var viewer))
+            {
+                viewer = new MockRoomPlayerRuntime
+                {
+                    PlayerId = session.PlayerId,
+                    IsViewer = true
+                };
+                room.Viewers.Add(viewer.PlayerId, viewer);
+            }
+
+            viewer.DisplayName = session.DisplayName;
+            viewer.Connected = true;
+            viewer.IsViewer = true;
         }
 
         private void TryStartDrawTelephone(MockRoomRuntime room)
@@ -421,6 +515,7 @@ namespace NiumaMiniGame.Mock
             room.CurrentStageIndex = -1;
             room.Chains.Clear();
             room.StrokeGroups.Clear();
+            room.ChainVotes.Clear();
 
             for (var chainIndex = 0; chainIndex < playerIds.Count; chainIndex++)
             {
@@ -646,6 +741,7 @@ namespace NiumaMiniGame.Mock
             }
 
             AddStrokePoints(group, batch.strokeId, batch.points);
+            BroadcastUnreliableToViewers(room.RoomId, MessageType.StrokePointBatch, batch);
         }
 
         private bool TryGetCurrentTelephoneTask(
@@ -702,6 +798,9 @@ namespace NiumaMiniGame.Mock
                 reviewSecondsPerChain = MockReviewSecondsPerChain
             });
             BroadcastRoomSnapshot(room);
+
+            // Mock 没有真实计时器，Review 广播后立即进入投票阶段，便于本地一键测试完整流程。
+            StartDrawTelephoneVoting(room);
         }
 
         private static DrawTelephoneChainState BuildChainState(MockDrawTelephoneChainRuntime chain)
@@ -730,8 +829,231 @@ namespace NiumaMiniGame.Mock
                 starterPlayerId = chain.StarterPlayerId,
                 entries = entries,
                 finalGuessText = finalGuess,
-                score = string.Equals(chain.OriginalWordText, finalGuess, StringComparison.OrdinalIgnoreCase) ? 100 : 0
+                score = 0
             };
+        }
+
+        private void StartDrawTelephoneVoting(MockRoomRuntime room)
+        {
+            room.State = nameof(MiniGameRoomState.Voting);
+            room.StateEnterTimeMs = MockMiniGameTime.NowMs;
+            room.StateDeadlineTimeMs = room.StateEnterTimeMs + (long)(MockVotingDurationSeconds * 1000f);
+            room.ChainVotes.Clear();
+
+            BroadcastReliableToRoom(room.RoomId, MessageType.DrawTelephoneVotingStarted, new DrawTelephoneVotingStarted
+            {
+                chains = BuildChainVoteInfos(room),
+                votingDurationSeconds = MockVotingDurationSeconds,
+                deadlineTimeMs = room.StateDeadlineTimeMs
+            });
+            BroadcastRoomSnapshot(room);
+        }
+
+        private void HandleSubmitChainVote(MockServerSession session, SubmitChainVote request)
+        {
+            if (session == null
+                || request == null
+                || string.IsNullOrWhiteSpace(session.RoomId)
+                || !_rooms.TryGetValue(session.RoomId, out var room)
+                || !string.Equals(room.State, nameof(MiniGameRoomState.Voting), StringComparison.Ordinal)
+                || request.score < 0
+                || request.score > 100)
+            {
+                session?.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidState), session?.RoomId);
+                return;
+            }
+
+            var chain = FindChain(room, request.chainId);
+            if (chain == null || string.Equals(chain.StarterPlayerId, session.PlayerId, StringComparison.Ordinal))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.PermissionDenied), session.RoomId);
+                return;
+            }
+
+            if (!room.ChainVotes.TryGetValue(request.chainId, out var votes))
+            {
+                votes = new Dictionary<string, int>();
+                room.ChainVotes.Add(request.chainId, votes);
+            }
+
+            if (votes.ContainsKey(session.PlayerId))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidState), session.RoomId);
+                return;
+            }
+
+            votes[session.PlayerId] = request.score;
+            if (AllVotesSubmitted(room))
+            {
+                EndDrawTelephoneVoting(room);
+            }
+        }
+
+        private void EndDrawTelephoneVoting(MockRoomRuntime room)
+        {
+            var results = BuildVoteResults(room);
+            BroadcastReliableToRoom(room.RoomId, MessageType.DrawTelephoneVotingEnded, new DrawTelephoneVotingEnded
+            {
+                results = results
+            });
+
+            ApplyVoteScores(room, results);
+            room.State = nameof(MiniGameRoomState.Settlement);
+            BroadcastReliableToRoom(room.RoomId, MessageType.GameEnded, new GameEnded
+            {
+                finalScores = BuildScoreEntries(room),
+                winnerPlayerId = FindWinnerPlayerId(room)
+            });
+
+            room.State = nameof(MiniGameRoomState.Closed);
+            BroadcastRoomSnapshot(room);
+        }
+
+        private static ChainVoteInfo[] BuildChainVoteInfos(MockRoomRuntime room)
+        {
+            var result = new ChainVoteInfo[room.Chains.Count];
+            for (var i = 0; i < room.Chains.Count; i++)
+            {
+                var chain = room.Chains[i];
+                room.Players.TryGetValue(chain.StarterPlayerId, out var starter);
+                result[i] = new ChainVoteInfo
+                {
+                    chainId = chain.ChainId,
+                    starterPlayerId = chain.StarterPlayerId,
+                    starterDisplayName = starter?.DisplayName,
+                    originalWord = chain.OriginalWordText,
+                    finalGuessText = chain.Entries.Length > 0 ? chain.Entries[chain.Entries.Length - 1].GuessText : null,
+                    entries = BuildStageEntries(chain)
+                };
+            }
+
+            return result;
+        }
+
+        private static ChainVoteResult[] BuildVoteResults(MockRoomRuntime room)
+        {
+            var result = new ChainVoteResult[room.Chains.Count];
+            for (var i = 0; i < room.Chains.Count; i++)
+            {
+                var chain = room.Chains[i];
+                room.ChainVotes.TryGetValue(chain.ChainId, out var votes);
+                var voteCount = votes?.Count ?? 0;
+                var totalScore = 0;
+                if (votes != null)
+                {
+                    foreach (var score in votes.Values)
+                    {
+                        totalScore += score;
+                    }
+                }
+
+                result[i] = new ChainVoteResult
+                {
+                    chainId = chain.ChainId,
+                    starterPlayerId = chain.StarterPlayerId,
+                    originalWord = chain.OriginalWordText,
+                    finalGuessText = chain.Entries.Length > 0 ? chain.Entries[chain.Entries.Length - 1].GuessText : null,
+                    finalScore = voteCount > 0 ? (int)Math.Round(totalScore / (double)voteCount) : 0,
+                    voteCount = voteCount
+                };
+            }
+
+            return result;
+        }
+
+        private static DrawTelephoneStageEntry[] BuildStageEntries(MockDrawTelephoneChainRuntime chain)
+        {
+            var entries = new DrawTelephoneStageEntry[chain.Entries.Length];
+            for (var i = 0; i < chain.Entries.Length; i++)
+            {
+                var source = chain.Entries[i];
+                entries[i] = new DrawTelephoneStageEntry
+                {
+                    stageIndex = source.StageIndex,
+                    playerId = source.PlayerId,
+                    actionType = source.ActionType,
+                    strokeGroupId = source.StrokeGroupId,
+                    guessText = source.GuessText,
+                    submittedTimeMs = source.SubmittedTimeMs,
+                    isTimeoutSubmit = source.IsTimeoutSubmit
+                };
+            }
+
+            return entries;
+        }
+
+        private static bool AllVotesSubmitted(MockRoomRuntime room)
+        {
+            foreach (var player in room.Players.Values)
+            {
+                foreach (var chain in room.Chains)
+                {
+                    if (string.Equals(chain.StarterPlayerId, player.PlayerId, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (!room.ChainVotes.TryGetValue(chain.ChainId, out var votes)
+                        || !votes.ContainsKey(player.PlayerId))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static void ApplyVoteScores(MockRoomRuntime room, ChainVoteResult[] results)
+        {
+            if (results == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < results.Length; i++)
+            {
+                var result = results[i];
+                if (result != null && room.Players.TryGetValue(result.starterPlayerId, out var player))
+                {
+                    player.Score += result.finalScore;
+                }
+            }
+        }
+
+        private static ScoreEntry[] BuildScoreEntries(MockRoomRuntime room)
+        {
+            var scores = new ScoreEntry[room.Players.Count];
+            var index = 0;
+            foreach (var player in room.Players.Values)
+            {
+                scores[index] = new ScoreEntry
+                {
+                    playerId = player.PlayerId,
+                    displayName = player.DisplayName,
+                    score = player.Score
+                };
+                index++;
+            }
+
+            Array.Sort(scores, (a, b) => b.score.CompareTo(a.score));
+            return scores;
+        }
+
+        private static string FindWinnerPlayerId(MockRoomRuntime room)
+        {
+            string winnerPlayerId = null;
+            var bestScore = int.MinValue;
+            foreach (var player in room.Players.Values)
+            {
+                if (player.Score > bestScore)
+                {
+                    bestScore = player.Score;
+                    winnerPlayerId = player.PlayerId;
+                }
+            }
+
+            return winnerPlayerId;
         }
 
         private static MockDrawTelephoneChainRuntime FindChain(MockRoomRuntime room, string chainId)
@@ -905,6 +1227,7 @@ namespace NiumaMiniGame.Mock
         private RoomSnapshot BuildSnapshot(MockRoomRuntime room, string playerId = null)
         {
             var players = new RoomPlayerSnapshot[room.Players.Count];
+            var viewers = new RoomViewerSnapshot[room.Viewers.Count];
             var scores = new ScoreEntry[room.Players.Count];
             var index = 0;
 
@@ -927,6 +1250,19 @@ namespace NiumaMiniGame.Mock
                 index++;
             }
 
+            index = 0;
+            foreach (var pair in room.Viewers)
+            {
+                var viewer = pair.Value;
+                viewers[index] = new RoomViewerSnapshot
+                {
+                    playerId = viewer.PlayerId,
+                    displayName = viewer.DisplayName,
+                    connected = viewer.Connected
+                };
+                index++;
+            }
+
             return new RoomSnapshot
             {
                 roomId = room.RoomId,
@@ -938,6 +1274,7 @@ namespace NiumaMiniGame.Mock
                 stateEnterTimeMs = room.StateEnterTimeMs,
                 stateDeadlineTimeMs = room.StateDeadlineTimeMs,
                 players = players,
+                viewers = viewers,
                 scores = scores,
                 currentTask = !string.IsNullOrWhiteSpace(playerId) && room.CurrentTasks.TryGetValue(playerId, out var task)
                     ? task
@@ -973,6 +1310,27 @@ namespace NiumaMiniGame.Mock
             foreach (var session in _sessions.Values)
             {
                 if (session.Connected && session.UdpBound && string.Equals(session.RoomId, roomId, StringComparison.Ordinal))
+                {
+                    session.Client.EnqueueUnreliable(messageType, payload, roomId);
+                }
+            }
+        }
+
+        private void BroadcastUnreliableToViewers<TMessage>(string roomId, string messageType, TMessage payload)
+            where TMessage : IRealtimeMessage
+        {
+            if (string.IsNullOrWhiteSpace(roomId) || !_rooms.TryGetValue(roomId, out var room))
+            {
+                return;
+            }
+
+            foreach (var session in _sessions.Values)
+            {
+                if (session.Connected
+                    && session.UdpBound
+                    && session.IsViewer
+                    && string.Equals(session.RoomId, roomId, StringComparison.Ordinal)
+                    && room.Viewers.ContainsKey(session.PlayerId))
                 {
                     session.Client.EnqueueUnreliable(messageType, payload, roomId);
                 }

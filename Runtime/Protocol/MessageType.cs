@@ -43,6 +43,9 @@ namespace NiumaMiniGame.Protocol
         public const string DrawTelephoneStageEnded = "DrawTelephoneStageEnded";
         public const string DrawTelephoneReviewStarted = "DrawTelephoneReviewStarted";
         public const string DrawTelephoneChainReviewed = "DrawTelephoneChainReviewed";
+        public const string DrawTelephoneVotingStarted = "DrawTelephoneVotingStarted";
+        public const string SubmitChainVote = "SubmitChainVote";
+        public const string DrawTelephoneVotingEnded = "DrawTelephoneVotingEnded";
 
         public const string SendRoomChatRequest = "SendRoomChatRequest";
         public const string RoomChatMessage = "RoomChatMessage";

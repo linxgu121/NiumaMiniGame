@@ -42,6 +42,7 @@ namespace NiumaMiniGame.Room
     {
         public string roomId;
         public string displayName;
+        public bool viewer;
     }
 
     [Serializable]
@@ -89,6 +90,8 @@ namespace NiumaMiniGame.Room
         public string errorCode;
         public string sessionId;
         public RoomSnapshot snapshot;
+        public string udpBindToken;
+        public int udpPort;
     }
 
     [Serializable]
@@ -103,6 +106,7 @@ namespace NiumaMiniGame.Room
         public long stateEnterTimeMs;
         public long stateDeadlineTimeMs;
         public RoomPlayerSnapshot[] players;
+        public RoomViewerSnapshot[] viewers;
         public ScoreEntry[] scores;
         public DrawTelephoneTask currentTask;
     }
@@ -113,6 +117,14 @@ namespace NiumaMiniGame.Room
         public string playerId;
         public string displayName;
         public bool ready;
+        public bool connected;
+    }
+
+    [Serializable]
+    public sealed class RoomViewerSnapshot
+    {
+        public string playerId;
+        public string displayName;
         public bool connected;
     }
 

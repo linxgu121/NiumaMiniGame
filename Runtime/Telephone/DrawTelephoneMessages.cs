@@ -99,6 +99,49 @@ namespace NiumaMiniGame.Telephone
     }
 
     [Serializable]
+    public sealed class DrawTelephoneVotingStarted : IRealtimeMessage
+    {
+        public ChainVoteInfo[] chains;
+        public float votingDurationSeconds;
+        public long deadlineTimeMs;
+    }
+
+    [Serializable]
+    public sealed class ChainVoteInfo
+    {
+        public string chainId;
+        public string starterPlayerId;
+        public string starterDisplayName;
+        public string originalWord;
+        public string finalGuessText;
+        public DrawTelephoneStageEntry[] entries;
+    }
+
+    [Serializable]
+    public sealed class SubmitChainVote : IRealtimeMessage
+    {
+        public string chainId;
+        public int score;
+    }
+
+    [Serializable]
+    public sealed class DrawTelephoneVotingEnded : IRealtimeMessage
+    {
+        public ChainVoteResult[] results;
+    }
+
+    [Serializable]
+    public sealed class ChainVoteResult
+    {
+        public string chainId;
+        public string starterPlayerId;
+        public string originalWord;
+        public string finalGuessText;
+        public int finalScore;
+        public int voteCount;
+    }
+
+    [Serializable]
     public sealed class SubmitTelephoneDrawing : IRealtimeMessage
     {
         public string chainId;

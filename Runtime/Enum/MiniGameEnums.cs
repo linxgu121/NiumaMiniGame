@@ -2,7 +2,7 @@ namespace NiumaMiniGame.Enum
 {
     /// <summary>
     /// 后端返回的结构化错误码。
-    /// 数值必须与 Java 后端 ErrorCode 保持一致。
+    /// 数值需要与 Java 后端 ErrorCode 保持一致。
     /// </summary>
     public enum MiniGameErrorCode
     {
@@ -23,7 +23,7 @@ namespace NiumaMiniGame.Enum
 
     /// <summary>
     /// 房间通用状态。
-    /// 具体玩法阶段由 ModeRuleEvaluator 决定，不在这里膨胀。
+    /// 具体玩法阶段由 ModeRuleEvaluator 决定，枚举只承载跨模式公共状态。
     /// </summary>
     public enum MiniGameRoomState
     {
@@ -33,7 +33,8 @@ namespace NiumaMiniGame.Enum
         Playing = 3,
         Review = 4,
         Settlement = 5,
-        Closed = 6
+        Closed = 6,
+        Voting = 7
     }
 
     /// <summary>
