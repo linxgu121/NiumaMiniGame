@@ -1,6 +1,9 @@
 using NiumaGal.Dialogue;
 using NiumaGal.Dialogue.Data;
 using NiumaGal.Presenter;
+using NiumaScene.Controller;
+using NiumaScene.Data;
+using NiumaScene.Enum;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
@@ -43,11 +46,29 @@ namespace NiumaMiniGame.GalBridge
         [SerializeField] private string cancelText = "下次再说";
 
         [Header("场景跳转")]
+        [Tooltip("NiumaScene 根控制器。为空时会自动查找。进入小游戏时通过它压入返回上下文并切换场景。")]
+        [SerializeField] private NiumaSceneController sceneController;
+
         [Tooltip("你画我猜 2D 开始界面的场景名。需要提前加入 Build Settings。")]
         [SerializeField] private string miniGameSceneName = "MiniGame_DrawTelephone";
 
-        [Tooltip("场景加载方式。Single 会切换到小游戏场景，Additive 会叠加加载。")]
+        [Tooltip("场景加载方式。NiumaScene 第一版会强制 Single；保留该字段仅用于兼容旧配置。")]
         [SerializeField] private LoadSceneMode loadSceneMode = LoadSceneMode.Single;
+
+        [Tooltip("从小游戏返回 RPG 场景时使用的出生点 ID。应绑定 NPC 附近的 SceneSpawnPoint，例如 npc_minigame_exit。")]
+        [SerializeField] private string returnSpawnPointId = "npc_minigame_exit";
+
+        [Tooltip("进入小游戏前是否压入返回上下文。NPC 进入小游戏流程必须开启。")]
+        [SerializeField] private bool pushReturnContext = true;
+
+        [Tooltip("加载小游戏场景时是否冻结玩家输入。")]
+        [SerializeField] private bool freezeInputDuringLoad = true;
+
+        [Tooltip("加载小游戏场景时是否请求显示 Loading UI。第七阶段接入 LoadingPanel 后生效。")]
+        [SerializeField] private bool showLoadingUI = true;
+
+        [Tooltip("进入小游戏前是否请求保存检查点意图。第六阶段接入 NiumaSave 后生效。")]
+        [SerializeField] private bool requestCheckpointSave;
 
         [Header("行为开关")]
         [Tooltip("为 true 时，只有对话完整推进到最后一句之后关闭，才会弹出入口。中途强制关闭不会触发。")]
@@ -124,7 +145,40 @@ namespace NiumaMiniGame.GalBridge
                 return;
             }
 
-            SceneManager.LoadScene(miniGameSceneName, loadSceneMode);
+            if (!ResolveSceneController(true))
+            {
+                LogWarning("未找到 NiumaSceneController，无法通过统一场景服务进入你画我猜。", true);
+                return;
+            }
+
+            var handle = sceneController.LoadScene(new SceneTransitionRequest
+            {
+                Purpose = SceneLoadPurpose.MiniGame,
+                Target = new SceneTransitionTarget
+                {
+                    SceneName = miniGameSceneName.Trim(),
+                    LoadMode = loadSceneMode,
+                    RestorePlayerAtSpawnPoint = false
+                },
+                ReturnPolicy = new SceneReturnPolicy
+                {
+                    PushReturnContext = pushReturnContext,
+                    ReturnSpawnPointId = pushReturnContext ? returnSpawnPointId : null
+                },
+                Options = new SceneTransitionOptions
+                {
+                    FreezeInputDuringLoad = freezeInputDuringLoad,
+                    ShowLoadingUI = showLoadingUI,
+                    RequestCheckpointSave = requestCheckpointSave,
+                    ReplacePendingRequest = true,
+                    ReturnOverflowPolicy = SceneReturnOverflowPolicy.RejectNew
+                }
+            });
+
+            if (handle.IsDone && (handle.Result == null || !handle.Result.Succeeded))
+            {
+                LogWarning($"进入 MiniGame 场景失败：{handle.Result?.ErrorCode} {handle.Result?.ErrorMessage}", true);
+            }
         }
 
         private void HandleCancelMiniGame()
@@ -201,6 +255,8 @@ namespace NiumaMiniGame.GalBridge
                 choicePanel = FindObjectOfType<MiniGameDialogueChoicePanel>(true);
             }
 
+            ResolveSceneController(false);
+
             return ValidateReferences(warn);
         }
 
@@ -231,6 +287,30 @@ namespace NiumaMiniGame.GalBridge
             }
 
             return true;
+        }
+
+        private bool ResolveSceneController(bool warn)
+        {
+            if (sceneController != null)
+            {
+                return true;
+            }
+
+            if (autoFindReferences)
+            {
+#if UNITY_2023_1_OR_NEWER
+                sceneController = FindFirstObjectByType<NiumaSceneController>();
+#else
+                sceneController = FindObjectOfType<NiumaSceneController>();
+#endif
+            }
+
+            if (sceneController == null)
+            {
+                LogWarning("未绑定 NiumaSceneController，进入小游戏时无法压入返回上下文。", warn);
+            }
+
+            return sceneController != null;
         }
 
         private void SubscribePresenter()

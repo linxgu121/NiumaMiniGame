@@ -3,6 +3,7 @@
   "references": [
     "NiumaMiniGame.Runtime",
     "NiumaGal.Runtime",
+    "NiumaScene.Runtime",
     "Unity.TextMeshPro",
     "Unity.ugui"
   ],

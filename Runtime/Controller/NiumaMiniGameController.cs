@@ -88,6 +88,12 @@ namespace NiumaMiniGame.Controller
             _blackboard.ApplyDisconnected();
         }
 
+        private void OnDestroy()
+        {
+            // 场景被卸载时兜底断开网络连接，避免小游戏场景销毁后房间会话仍悬挂在后端或 MockServer 中。
+            Disconnect("SceneUnload");
+        }
+
         public bool Connect()
         {
             if (!EnsureNetworkClient())
