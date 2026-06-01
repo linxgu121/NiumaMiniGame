@@ -194,6 +194,21 @@ namespace NiumaMiniGame.Controller
             return SendReliable(new PlayerReadyRequest { ready = ready });
         }
 
+        public bool StartGame()
+        {
+            return SendReliable(new StartGameRequest { roomId = _blackboard.CurrentRoomId });
+        }
+
+        public bool ChangeMode(string modeId)
+        {
+            if (string.IsNullOrWhiteSpace(modeId))
+            {
+                return false;
+            }
+
+            return SendReliable(new ChangeModeRequest { modeId = modeId.Trim() });
+        }
+
         public bool BindUdp()
         {
             return SendReliable(new UdpBindRequest
@@ -364,6 +379,9 @@ namespace NiumaMiniGame.Controller
                     break;
                 case MessageType.RoomChatMessage:
                     _blackboard.AddChat(Deserialize<RoomChatMessage>(message));
+                    break;
+                case MessageType.RoomToastMessage:
+                    _blackboard.ApplyToast(Deserialize<RoomToastMessage>(message));
                     break;
                 case MessageType.RoomGiftSent:
                     _blackboard.AddGift(Deserialize<RoomGiftSent>(message));

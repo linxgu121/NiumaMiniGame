@@ -38,6 +38,7 @@ namespace NiumaMiniGame.Controller
         public ReconnectResult LastReconnectResult { get; private set; }
         public UdpBindAccepted LastUdpBindAccepted { get; private set; }
         public ErrorMessage LastError { get; private set; }
+        public RoomToastMessage LastToast { get; private set; }
         public ServerShutdown LastServerShutdown { get; private set; }
 
         public RoomSnapshot CurrentRoomSnapshot { get; private set; }
@@ -89,6 +90,7 @@ namespace NiumaMiniGame.Controller
             LastReconnectResult = null;
             LastUdpBindAccepted = null;
             LastError = null;
+            LastToast = null;
             LastServerShutdown = null;
             CurrentRoomSnapshot = null;
             CurrentStage = null;
@@ -231,6 +233,12 @@ namespace NiumaMiniGame.Controller
         public void ApplyError(ErrorMessage error)
         {
             LastError = error;
+            BumpRevision();
+        }
+
+        public void ApplyToast(RoomToastMessage toast)
+        {
+            LastToast = toast;
             BumpRevision();
         }
 

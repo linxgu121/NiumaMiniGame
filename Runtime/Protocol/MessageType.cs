@@ -18,6 +18,9 @@ namespace NiumaMiniGame.Protocol
         public const string PlayerJoined = "PlayerJoined";
         public const string PlayerLeft = "PlayerLeft";
         public const string PlayerReadyRequest = "PlayerReadyRequest";
+        public const string StartGameRequest = "StartGameRequest";
+        public const string ChangeModeRequest = "ChangeModeRequest";
+        public const string RoomToastMessage = "RoomToastMessage";
 
         public const string RoundStarted = "RoundStarted";
         public const string WordOptionsPushed = "WordOptionsPushed";

@@ -108,6 +108,12 @@ namespace NiumaMiniGame.Mock
                 case PlayerReadyRequest request:
                     HandleReady(session, request);
                     break;
+                case StartGameRequest request:
+                    HandleStartGame(session, request);
+                    break;
+                case ChangeModeRequest request:
+                    HandleChangeMode(session, request);
+                    break;
                 case Heartbeat heartbeat:
                     HandleHeartbeat(session, heartbeat);
                     break;
@@ -180,6 +186,7 @@ namespace NiumaMiniGame.Mock
             {
                 RoomId = roomId,
                 ModeId = string.IsNullOrWhiteSpace(request.modeId) ? "draw_telephone" : request.modeId,
+                HostPlayerId = session.PlayerId,
                 State = nameof(MiniGameRoomState.Lobby),
                 StateEnterTimeMs = MockMiniGameTime.NowMs,
                 StateDeadlineTimeMs = 0L
@@ -292,6 +299,7 @@ namespace NiumaMiniGame.Mock
             }
 
             room.Players.Remove(session.PlayerId);
+            TransferHostIfNeeded(room);
             session.RoomId = null;
             session.IsViewer = false;
 
@@ -323,8 +331,101 @@ namespace NiumaMiniGame.Mock
             {
                 player.Ready = request.ready;
                 BroadcastRoomSnapshot(room);
-                TryStartDrawTelephone(room);
+                TryStartDrawTelephone(room, true);
             }
+        }
+
+        private static void TransferHostIfNeeded(MockRoomRuntime room)
+        {
+            if (room == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(room.HostPlayerId) && room.Players.ContainsKey(room.HostPlayerId))
+            {
+                return;
+            }
+
+            MockRoomPlayerRuntime nextHost = null;
+            foreach (var player in room.Players.Values)
+            {
+                if (nextHost == null || player.JoinedAtMs < nextHost.JoinedAtMs)
+                {
+                    nextHost = player;
+                }
+            }
+
+            room.HostPlayerId = nextHost?.PlayerId;
+        }
+
+        private void HandleStartGame(MockServerSession session, StartGameRequest request)
+        {
+            var roomId = !string.IsNullOrWhiteSpace(request?.roomId) ? request.roomId : session.RoomId;
+            if (string.IsNullOrWhiteSpace(roomId) || !_rooms.TryGetValue(roomId, out var room))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.RoomNotFound));
+                return;
+            }
+
+            if (!string.Equals(room.HostPlayerId, session.PlayerId, StringComparison.Ordinal))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.PermissionDenied), room.RoomId);
+                return;
+            }
+
+            if (!TryStartDrawTelephone(room, false))
+            {
+                BroadcastReliableToRoom(room.RoomId, MessageType.RoomToastMessage, new RoomToastMessage
+                {
+                    messageKey = "room_start_not_enough_players",
+                    text = "当前玩家数量没满足模式需求无法开始游戏",
+                    sourcePlayerId = session.PlayerId,
+                    serverTimeMs = MockMiniGameTime.NowMs
+                });
+            }
+        }
+
+        private void HandleChangeMode(MockServerSession session, ChangeModeRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(session.RoomId) || !_rooms.TryGetValue(session.RoomId, out var room))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.RoomNotFound));
+                return;
+            }
+
+            if (!string.Equals(room.HostPlayerId, session.PlayerId, StringComparison.Ordinal))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.PermissionDenied), room.RoomId);
+                return;
+            }
+
+            if (!string.Equals(room.State, nameof(MiniGameRoomState.Lobby), StringComparison.Ordinal))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidState), room.RoomId);
+                return;
+            }
+
+            if (request == null || string.IsNullOrWhiteSpace(request.modeId))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidMessage), room.RoomId);
+                return;
+            }
+
+            room.ModeId = request.modeId.Trim();
+            foreach (var player in room.Players.Values)
+            {
+                player.Ready = false;
+            }
+
+            BroadcastReliableToRoom(room.RoomId, MessageType.RoomToastMessage, new RoomToastMessage
+            {
+                messageKey = "room_mode_changed",
+                text = "房主已切换模式。",
+                sourcePlayerId = session.PlayerId,
+                serverTimeMs = MockMiniGameTime.NowMs
+            });
+            BroadcastRoomSnapshot(room);
         }
 
         private void HandleHeartbeat(MockServerSession session, Heartbeat heartbeat)
@@ -447,7 +548,8 @@ namespace NiumaMiniGame.Mock
             {
                 player = new MockRoomPlayerRuntime
                 {
-                    PlayerId = session.PlayerId
+                    PlayerId = session.PlayerId,
+                    JoinedAtMs = MockMiniGameTime.NowMs
                 };
                 room.Players.Add(player.PlayerId, player);
             }
@@ -468,6 +570,7 @@ namespace NiumaMiniGame.Mock
                 viewer = new MockRoomPlayerRuntime
                 {
                     PlayerId = session.PlayerId,
+                    JoinedAtMs = MockMiniGameTime.NowMs,
                     IsViewer = true
                 };
                 room.Viewers.Add(viewer.PlayerId, viewer);
@@ -478,29 +581,35 @@ namespace NiumaMiniGame.Mock
             viewer.IsViewer = true;
         }
 
-        private void TryStartDrawTelephone(MockRoomRuntime room)
+        private bool TryStartDrawTelephone(MockRoomRuntime room, bool requireReady)
         {
             if (room == null
                 || !string.Equals(room.ModeId, "draw_telephone", StringComparison.Ordinal)
                 || !string.Equals(room.State, nameof(MiniGameRoomState.Lobby), StringComparison.Ordinal))
             {
-                return;
+                return false;
             }
 
             if (room.Players.Count < DrawTelephoneMinPlayers || room.Players.Count % 2 != 0)
             {
-                return;
+                return false;
             }
 
             foreach (var player in room.Players.Values)
             {
-                if (!player.Ready || !player.Connected)
+                if (!player.Connected)
                 {
-                    return;
+                    return false;
+                }
+
+                if (requireReady && !player.Ready)
+                {
+                    return false;
                 }
             }
 
             StartDrawTelephone(room);
+            return true;
         }
 
         private void StartDrawTelephone(MockRoomRuntime room)
@@ -1226,14 +1335,18 @@ namespace NiumaMiniGame.Mock
 
         private RoomSnapshot BuildSnapshot(MockRoomRuntime room, string playerId = null)
         {
-            var players = new RoomPlayerSnapshot[room.Players.Count];
-            var viewers = new RoomViewerSnapshot[room.Viewers.Count];
-            var scores = new ScoreEntry[room.Players.Count];
+            var playerRuntimes = new List<MockRoomPlayerRuntime>(room.Players.Values);
+            playerRuntimes.Sort((left, right) => left.JoinedAtMs.CompareTo(right.JoinedAtMs));
+            var viewerRuntimes = new List<MockRoomPlayerRuntime>(room.Viewers.Values);
+            viewerRuntimes.Sort((left, right) => left.JoinedAtMs.CompareTo(right.JoinedAtMs));
+
+            var players = new RoomPlayerSnapshot[playerRuntimes.Count];
+            var viewers = new RoomViewerSnapshot[viewerRuntimes.Count];
+            var scores = new ScoreEntry[playerRuntimes.Count];
             var index = 0;
 
-            foreach (var pair in room.Players)
+            foreach (var player in playerRuntimes)
             {
-                var player = pair.Value;
                 players[index] = new RoomPlayerSnapshot
                 {
                     playerId = player.PlayerId,
@@ -1251,9 +1364,8 @@ namespace NiumaMiniGame.Mock
             }
 
             index = 0;
-            foreach (var pair in room.Viewers)
+            foreach (var viewer in viewerRuntimes)
             {
-                var viewer = pair.Value;
                 viewers[index] = new RoomViewerSnapshot
                 {
                     playerId = viewer.PlayerId,
@@ -1267,6 +1379,7 @@ namespace NiumaMiniGame.Mock
             {
                 roomId = room.RoomId,
                 modeId = room.ModeId,
+                hostPlayerId = room.HostPlayerId,
                 state = room.State,
                 roundIndex = room.RoundIndex,
                 maxRoundCount = room.MaxRoundCount,

@@ -9,6 +9,7 @@ namespace NiumaMiniGame.Mock
     {
         public string RoomId;
         public string ModeId;
+        public string HostPlayerId;
         public string State = nameof(MiniGameRoomState.Lobby);
         public int RoundIndex = 0;
         public int MaxRoundCount = 0;
@@ -31,6 +32,7 @@ namespace NiumaMiniGame.Mock
     {
         public string PlayerId;
         public string DisplayName;
+        public long JoinedAtMs;
         public bool Ready;
         public bool Connected;
         public bool IsViewer;

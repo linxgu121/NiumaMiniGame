@@ -151,10 +151,10 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("房间号输入页返回按钮。点击后回到预备页。")]
         [SerializeField] private Button roomInputBackButton;
 
-        [Tooltip("房主开始游戏按钮。当前协议未提供 StartGameRequest，第一版先做人数校验并发送准备请求。")]
+        [Tooltip("房主开始游戏按钮。点击后发送 StartGameRequest，由后端统一校验人数和模式规则。")]
         [SerializeField] private Button hostStartGameButton;
 
-        [Tooltip("模式选择按钮。第一版在创建房间前生效；房间内切换需要后端补 ChangeModeRequest 后再接入。")]
+        [Tooltip("模式选择按钮。房间外只修改待创建模式；房间内由房主发送 ChangeModeRequest。")]
         [SerializeField] private Button modeSelectButton;
 
         [Header("文本显示")]
@@ -205,9 +205,6 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("可切换的模式配置。第一版建议至少配置 draw_telephone。")]
         [SerializeField] private MiniGameModeOption[] modeOptions;
 
-        [Tooltip("人数不足时是否把提示作为聊天消息发给房间内其他人。当前没有专用 Toast 协议，先用聊天兜底同步。")]
-        [SerializeField] private bool syncRoomTipByChat = true;
-
         [Tooltip("本地短提示显示秒数。")]
         [SerializeField] private float toastSeconds = 2f;
 
@@ -252,6 +249,7 @@ namespace NiumaMiniGame.UIBridge
         private int _selectedModeIndex = -1;
         private float _toastHideTime = -1f;
         private bool _gameplaySceneLoadRequested;
+        private long _lastAppliedToastTimeMs;
 
         private void Awake()
         {
@@ -304,6 +302,7 @@ namespace NiumaMiniGame.UIBridge
             RefreshPanels(panel);
             RefreshTexts(panel);
             RefreshButtonStates(panel);
+            ApplyServerToast(panel?.LastToast);
             TryLoadGameplayScene(panel);
         }
 
@@ -444,7 +443,10 @@ namespace NiumaMiniGame.UIBridge
 
             if (_lastPanel != null && !string.IsNullOrWhiteSpace(_lastPanel.RoomId))
             {
-                ShowRoomTip("当前协议暂未接入房间内模式切换，新的模式选择会在下次创建房间时生效。", false);
+                if (ResolveController(true))
+                {
+                    miniGameController.ChangeMode(ReadModeId());
+                }
             }
         }
 
@@ -465,14 +467,10 @@ namespace NiumaMiniGame.UIBridge
             {
                 ShowRoomTip(string.IsNullOrWhiteSpace(reason)
                     ? "当前玩家数量没满足模式需求无法开始游戏"
-                    : reason, syncRoomTipByChat);
-                return;
+                    : reason, false);
             }
 
-            // 当前前端协议没有 StartGameRequest。Mock/后端第一版使用“全员准备”触发开局，
-            // 因此房主开始游戏先将自己置为已准备；后续补 StartGameRequest 时只替换这里。
-            miniGameController.SetReady(true);
-            ShowRoomTip("人数满足，已发送开始请求。当前版本需要所有玩家准备后进入游戏。", false);
+            miniGameController.StartGame();
         }
 
         private void JoinRoom(bool asViewer)
@@ -657,7 +655,7 @@ namespace NiumaMiniGame.UIBridge
 
         private string BuildRoomSummary(MiniGameRoomViewData room, bool isLocalViewer)
         {
-            return $"房间：{room.RoomId}\n模式：{room.ModeId}\n状态：{room.State}\n身份：{(isLocalViewer ? "观战者" : "玩家")}";
+            return $"房间：{room.RoomId}\n模式：{room.ModeId}\n状态：{room.State}\n房主：{ShortId(room.HostPlayerId)}\n身份：{(isLocalViewer ? "观战者" : "玩家")}";
         }
 
         private string BuildPlayerList(string title, MiniGamePlayerViewData[] players)
@@ -685,6 +683,11 @@ namespace NiumaMiniGame.UIBridge
 
                 if (!player.IsViewer)
                 {
+                    if (player.IsHost)
+                    {
+                        _builder.Append("  房主");
+                    }
+
                     _builder.Append(player.IsReady ? "  已准备" : "  未准备");
                 }
 
@@ -800,22 +803,9 @@ namespace NiumaMiniGame.UIBridge
 
         private bool IsLocalHost(MiniGamePanelViewData panel)
         {
-            var players = panel?.Room?.Players;
-            if (players == null || players.Length == 0)
-            {
-                return false;
-            }
-
-            // 当前协议没有 HostId 字段，第一版约定房间玩家列表第一个玩家为房主。
-            for (var i = 0; i < players.Length; i++)
-            {
-                if (players[i] != null)
-                {
-                    return players[i].IsLocalPlayer;
-                }
-            }
-
-            return false;
+            return !string.IsNullOrWhiteSpace(panel?.Room?.HostPlayerId)
+                   && !string.IsNullOrWhiteSpace(panel.LocalPlayerId)
+                   && string.Equals(panel.Room.HostPlayerId, panel.LocalPlayerId, StringComparison.Ordinal);
         }
 
         private void ShowRoomTip(string message, bool syncToChat)
@@ -827,6 +817,22 @@ namespace NiumaMiniGame.UIBridge
             {
                 miniGameController.SendChat($"[系统提示] {message}");
             }
+        }
+
+        private void ApplyServerToast(MiniGameToastViewData toast)
+        {
+            if (toast == null || string.IsNullOrWhiteSpace(toast.Text))
+            {
+                return;
+            }
+
+            if (toast.ServerTimeMs > 0L && toast.ServerTimeMs == _lastAppliedToastTimeMs)
+            {
+                return;
+            }
+
+            _lastAppliedToastTimeMs = toast.ServerTimeMs;
+            ShowRoomTip(toast.Text, false);
         }
 
         private TMP_Text GetToastTarget()

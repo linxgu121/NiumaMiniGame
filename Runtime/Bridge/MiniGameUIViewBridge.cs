@@ -131,7 +131,8 @@ namespace NiumaMiniGame.Bridge
                 VotingResult = BuildVotingResultViewData(blackboard.CurrentVotingResult),
                 Chats = BuildChatViewData(blackboard.ChatMessages, blackboard.LocalPlayerId),
                 Gifts = BuildGiftViewData(blackboard.GiftMessages, blackboard.LocalPlayerId),
-                LastError = BuildErrorViewData(blackboard.LastError)
+                LastError = BuildErrorViewData(blackboard.LastError),
+                LastToast = BuildToastViewData(blackboard.LastToast)
             };
         }
 
@@ -146,18 +147,19 @@ namespace NiumaMiniGame.Bridge
             {
                 RoomId = snapshot.roomId,
                 ModeId = snapshot.modeId,
+                HostPlayerId = snapshot.hostPlayerId,
                 State = ParseRoomState(snapshot.state),
                 RoundIndex = snapshot.roundIndex,
                 MaxRoundCount = snapshot.maxRoundCount,
                 DrawerPlayerId = snapshot.drawerPlayerId,
                 RemainingSeconds = ComputeRemainingSeconds(snapshot.stateDeadlineTimeMs, serverTimeMs),
-                Players = BuildPlayers(snapshot.players, localPlayerId, false),
+                Players = BuildPlayers(snapshot.players, localPlayerId, snapshot.hostPlayerId, false),
                 Viewers = BuildViewers(snapshot.viewers, localPlayerId),
                 Scores = BuildScores(snapshot.scores)
             };
         }
 
-        private static MiniGamePlayerViewData[] BuildPlayers(RoomPlayerSnapshot[] players, string localPlayerId, bool isViewer)
+        private static MiniGamePlayerViewData[] BuildPlayers(RoomPlayerSnapshot[] players, string localPlayerId, string hostPlayerId, bool isViewer)
         {
             if (players == null || players.Length == 0)
             {
@@ -175,6 +177,7 @@ namespace NiumaMiniGame.Bridge
                     IsReady = player != null && player.ready,
                     IsConnected = player != null && player.connected,
                     IsLocalPlayer = player != null && string.Equals(player.playerId, localPlayerId, StringComparison.Ordinal),
+                    IsHost = player != null && string.Equals(player.playerId, hostPlayerId, StringComparison.Ordinal),
                     IsViewer = isViewer
                 };
             }
@@ -200,6 +203,7 @@ namespace NiumaMiniGame.Bridge
                     IsReady = false,
                     IsConnected = viewer != null && viewer.connected,
                     IsLocalPlayer = viewer != null && string.Equals(viewer.playerId, localPlayerId, StringComparison.Ordinal),
+                    IsHost = false,
                     IsViewer = true
                 };
             }
@@ -377,6 +381,19 @@ namespace NiumaMiniGame.Bridge
                     ErrorCode = error.errorCode,
                     MessageKey = error.messageKey,
                     DebugMessage = error.debugMessage
+                };
+        }
+
+        private static MiniGameToastViewData BuildToastViewData(RoomToastMessage toast)
+        {
+            return toast == null
+                ? null
+                : new MiniGameToastViewData
+                {
+                    MessageKey = toast.messageKey,
+                    Text = toast.text,
+                    SourcePlayerId = toast.sourcePlayerId,
+                    ServerTimeMs = toast.serverTimeMs
                 };
         }
 

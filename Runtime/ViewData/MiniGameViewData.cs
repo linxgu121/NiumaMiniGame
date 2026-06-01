@@ -23,6 +23,7 @@ namespace NiumaMiniGame.ViewData
         public MiniGameChatViewData[] Chats;
         public MiniGameGiftViewData[] Gifts;
         public MiniGameErrorViewData LastError;
+        public MiniGameToastViewData LastToast;
     }
 
     /// <summary>
@@ -34,6 +35,7 @@ namespace NiumaMiniGame.ViewData
     {
         public string RoomId;
         public string ModeId;
+        public string HostPlayerId;
         public MiniGameRoomState State;
         public int RoundIndex;
         public int MaxRoundCount;
@@ -52,6 +54,7 @@ namespace NiumaMiniGame.ViewData
         public bool IsReady;
         public bool IsConnected;
         public bool IsLocalPlayer;
+        public bool IsHost;
         public bool IsViewer;
     }
 
@@ -91,6 +94,15 @@ namespace NiumaMiniGame.ViewData
         public string ErrorCode;
         public string MessageKey;
         public string DebugMessage;
+    }
+
+    [Serializable]
+    public sealed class MiniGameToastViewData
+    {
+        public string MessageKey;
+        public string Text;
+        public string SourcePlayerId;
+        public long ServerTimeMs;
     }
 
     [Serializable]

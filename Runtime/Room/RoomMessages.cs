@@ -76,6 +76,27 @@ namespace NiumaMiniGame.Room
     }
 
     [Serializable]
+    public sealed class StartGameRequest : IRealtimeMessage
+    {
+        public string roomId;
+    }
+
+    [Serializable]
+    public sealed class ChangeModeRequest : IRealtimeMessage
+    {
+        public string modeId;
+    }
+
+    [Serializable]
+    public sealed class RoomToastMessage : IRealtimeMessage
+    {
+        public string messageKey;
+        public string text;
+        public string sourcePlayerId;
+        public long serverTimeMs;
+    }
+
+    [Serializable]
     public sealed class ReconnectRequest : IRealtimeMessage
     {
         public string playerId;
@@ -99,6 +120,7 @@ namespace NiumaMiniGame.Room
     {
         public string roomId;
         public string modeId;
+        public string hostPlayerId;
         public string state;
         public int roundIndex;
         public int maxRoundCount;
