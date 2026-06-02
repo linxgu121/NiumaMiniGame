@@ -34,6 +34,7 @@ namespace NiumaMiniGame.Protocol
 
         public const string StrokeBegin = "StrokeBegin";
         public const string StrokeEnd = "StrokeEnd";
+        public const string ClearCanvasRequest = "ClearCanvasRequest";
         public const string CanvasCleared = "CanvasCleared";
         public const string UndoStrokeRequest = "UndoStrokeRequest";
         public const string StrokeUndone = "StrokeUndone";
@@ -49,6 +50,11 @@ namespace NiumaMiniGame.Protocol
         public const string DrawTelephoneVotingStarted = "DrawTelephoneVotingStarted";
         public const string SubmitChainVote = "SubmitChainVote";
         public const string DrawTelephoneVotingEnded = "DrawTelephoneVotingEnded";
+
+        public const string SequentialRelayStateChanged = "SequentialRelayStateChanged";
+        public const string SubmitSequentialDrawing = "SubmitSequentialDrawing";
+        public const string SubmitSequentialAnswer = "SubmitSequentialAnswer";
+        public const string SubmitSequentialEvaluation = "SubmitSequentialEvaluation";
 
         public const string SendRoomChatRequest = "SendRoomChatRequest";
         public const string RoomChatMessage = "RoomChatMessage";

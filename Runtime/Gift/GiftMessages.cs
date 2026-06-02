@@ -8,6 +8,9 @@ namespace NiumaMiniGame.Gift
     {
         public string giftType;
         public string toPlayerId;
+        public string targetModule;
+        public float normalizedX;
+        public float normalizedY;
     }
 
     [Serializable]
@@ -17,6 +20,9 @@ namespace NiumaMiniGame.Gift
         public string fromDisplayName;
         public string toPlayerId;
         public string giftType;
+        public string targetModule;
+        public float normalizedX;
+        public float normalizedY;
         public long serverTimeMs;
     }
 }

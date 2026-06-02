@@ -20,6 +20,7 @@ namespace NiumaMiniGame.ViewData
         public DrawTelephoneReviewViewData Review;
         public DrawTelephoneVotingViewData Voting;
         public DrawTelephoneVotingResultViewData VotingResult;
+        public MiniGameGameplayViewData Gameplay;
         public MiniGameChatViewData[] Chats;
         public MiniGameGiftViewData[] Gifts;
         public MiniGameErrorViewData LastError;
@@ -56,6 +57,8 @@ namespace NiumaMiniGame.ViewData
         public bool IsLocalPlayer;
         public bool IsHost;
         public bool IsViewer;
+        public MiniGamePlayerState PlayerState;
+        public string PlayerStateText;
     }
 
     [Serializable]
@@ -84,8 +87,74 @@ namespace NiumaMiniGame.ViewData
         public string FromDisplayName;
         public string ToPlayerId;
         public string GiftType;
+        public string TargetModule;
+        public float NormalizedX;
+        public float NormalizedY;
         public long ServerTimeMs;
         public bool IsFromLocalPlayer;
+    }
+
+    [Serializable]
+    public sealed class MiniGameGameplayViewData
+    {
+        public string RoomId;
+        public string ModeId;
+        public MiniGameGameplayPhase Phase;
+        public string LocalPlayerId;
+        public MiniGamePlayerState LocalPlayerState;
+        public string CurrentDrawerPlayerId;
+        public string CurrentDrawerDisplayName;
+        public string CurrentAnswererPlayerId;
+        public string CurrentAnswererDisplayName;
+        public string VisiblePromptText;
+        public bool PromptIsOriginalWord;
+        public string VisibleAnswerText;
+        public string AnswererPlayerId;
+        public string AnswererDisplayName;
+        public string FinalOriginalWord;
+        public string FinalGuessText;
+        public string FinalAnswererPlayerId;
+        public string FinalAnswererDisplayName;
+        public float RemainingSeconds;
+        public MiniGameGameplayAccessViewData Access;
+        public MiniGamePlayerViewData[] Players;
+        public MiniGameChatViewData[] Chats;
+        public MiniGameGiftViewData[] Gifts;
+        public MiniGameEvaluationViewData[] Evaluations;
+    }
+
+    [Serializable]
+    public sealed class MiniGameGameplayAccessViewData
+    {
+        public MiniGameUIAccessState DrawingBoard;
+        public MiniGameUIAccessState BrushTools;
+        public MiniGameUIAccessState ColorPalette;
+        public MiniGameUIAccessState Canvas;
+        public MiniGameUIAccessState DrawerName;
+        public MiniGameUIAccessState FinishButton;
+        public MiniGameUIAccessState Chat;
+        public MiniGameUIAccessState Answer;
+        public MiniGameUIAccessState Menu;
+        public MiniGameUIAccessState Topic;
+        public MiniGameUIAccessState Timer;
+        public MiniGameUIAccessState PlayerList;
+        public MiniGameUIAccessState DrawPrompt;
+        public MiniGameUIAccessState AnswerPrompt;
+        public MiniGameUIAccessState Evaluation;
+        public MiniGameUIAccessState AgreeButton;
+        public MiniGameUIAccessState DisagreeButton;
+        public MiniGameUIAccessState EvaluationList;
+    }
+
+    [Serializable]
+    public sealed class MiniGameEvaluationViewData
+    {
+        public string PlayerId;
+        public string DisplayName;
+        public bool CanEvaluate;
+        public bool HasEvaluated;
+        public bool Agreed;
+        public bool IsLocalPlayer;
     }
 
     [Serializable]

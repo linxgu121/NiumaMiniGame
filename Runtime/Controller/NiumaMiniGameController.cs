@@ -234,6 +234,60 @@ namespace NiumaMiniGame.Controller
             });
         }
 
+        public bool SendGift(string giftType, string toPlayerId, string targetModule, float normalizedX, float normalizedY)
+        {
+            return SendReliable(new SendRoomGiftRequest
+            {
+                giftType = giftType,
+                toPlayerId = toPlayerId,
+                targetModule = targetModule,
+                normalizedX = Mathf.Clamp01(normalizedX),
+                normalizedY = Mathf.Clamp01(normalizedY)
+            });
+        }
+
+        public bool SendStrokeBegin(string strokeId, Color color, float brushSize)
+        {
+            return SendReliable(new StrokeBegin
+            {
+                strokeId = strokeId,
+                colorR = color.r,
+                colorG = color.g,
+                colorB = color.b,
+                brushSize = Mathf.Max(0.001f, brushSize)
+            });
+        }
+
+        public bool SendStrokeEnd(string strokeId, int totalPoints)
+        {
+            return SendReliable(new StrokeEnd
+            {
+                strokeId = strokeId,
+                totalPoints = Mathf.Max(0, totalPoints)
+            });
+        }
+
+        public bool RequestUndoStroke(string strokeId)
+        {
+            if (string.IsNullOrWhiteSpace(strokeId))
+            {
+                return false;
+            }
+
+            return SendReliable(new UndoStrokeRequest
+            {
+                strokeId = strokeId.Trim()
+            });
+        }
+
+        public bool RequestClearCanvas()
+        {
+            return SendReliable(new ClearCanvasRequest
+            {
+                roomId = _blackboard.CurrentRoomId
+            });
+        }
+
         public bool SubmitDrawing(string chainId, string strokeGroupId)
         {
             return SendReliable(new SubmitTelephoneDrawing
@@ -258,6 +312,35 @@ namespace NiumaMiniGame.Controller
             {
                 chainId = chainId,
                 score = Mathf.Clamp(score, 0, 100)
+            });
+        }
+
+        public bool SubmitSequentialDrawing(string strokeGroupId)
+        {
+            if (string.IsNullOrWhiteSpace(strokeGroupId))
+            {
+                return false;
+            }
+
+            return SendReliable(new SubmitSequentialDrawing
+            {
+                strokeGroupId = strokeGroupId.Trim()
+            });
+        }
+
+        public bool SubmitSequentialAnswer(string answerText)
+        {
+            return SendReliable(new SubmitSequentialAnswer
+            {
+                answerText = answerText
+            });
+        }
+
+        public bool SubmitSequentialEvaluation(bool agreed)
+        {
+            return SendReliable(new SubmitSequentialEvaluation
+            {
+                agreed = agreed
             });
         }
 
@@ -373,6 +456,9 @@ namespace NiumaMiniGame.Controller
                     break;
                 case MessageType.DrawTelephoneVotingEnded:
                     _blackboard.ApplyVotingEnded(Deserialize<DrawTelephoneVotingEnded>(message));
+                    break;
+                case MessageType.SequentialRelayStateChanged:
+                    _blackboard.ApplySequentialRelayStateChanged(Deserialize<SequentialRelayStateChanged>(message));
                     break;
                 case MessageType.GameEnded:
                     _blackboard.ApplyGameEnded(Deserialize<GameEnded>(message));

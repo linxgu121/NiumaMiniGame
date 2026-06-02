@@ -114,6 +114,10 @@ namespace NiumaMiniGame.Bridge
         {
             var blackboard = miniGameController.Blackboard;
             var room = blackboard.CurrentRoomSnapshot;
+            var sequentialRelay = blackboard.CurrentSequentialRelay ?? room?.sequentialRelay;
+            var chats = BuildChatViewData(blackboard.ChatMessages, blackboard.LocalPlayerId);
+            var gifts = BuildGiftViewData(blackboard.GiftMessages, blackboard.LocalPlayerId);
+            var roomViewData = BuildRoomViewData(room, blackboard.LocalPlayerId, blackboard.ServerTimeMs, sequentialRelay);
 
             return new MiniGamePanelViewData
             {
@@ -124,19 +128,24 @@ namespace NiumaMiniGame.Bridge
                 SessionId = blackboard.SessionId,
                 RoomId = blackboard.CurrentRoomId,
                 LastMessageType = blackboard.LastMessageType,
-                Room = BuildRoomViewData(room, blackboard.LocalPlayerId, blackboard.ServerTimeMs),
+                Room = roomViewData,
                 CurrentTask = BuildTaskViewData(blackboard.CurrentTask, room, blackboard.ServerTimeMs),
                 Review = BuildReviewViewData(blackboard.CurrentReview),
                 Voting = BuildVotingViewData(blackboard.CurrentVoting, blackboard.ServerTimeMs),
                 VotingResult = BuildVotingResultViewData(blackboard.CurrentVotingResult),
-                Chats = BuildChatViewData(blackboard.ChatMessages, blackboard.LocalPlayerId),
-                Gifts = BuildGiftViewData(blackboard.GiftMessages, blackboard.LocalPlayerId),
+                Gameplay = BuildGameplayViewData(room, sequentialRelay, roomViewData, blackboard, chats, gifts),
+                Chats = chats,
+                Gifts = gifts,
                 LastError = BuildErrorViewData(blackboard.LastError),
                 LastToast = BuildToastViewData(blackboard.LastToast)
             };
         }
 
-        private static MiniGameRoomViewData BuildRoomViewData(RoomSnapshot snapshot, string localPlayerId, long serverTimeMs)
+        private static MiniGameRoomViewData BuildRoomViewData(
+            RoomSnapshot snapshot,
+            string localPlayerId,
+            long serverTimeMs,
+            SequentialRelayStateSnapshot sequentialRelay)
         {
             if (snapshot == null)
             {
@@ -153,13 +162,18 @@ namespace NiumaMiniGame.Bridge
                 MaxRoundCount = snapshot.maxRoundCount,
                 DrawerPlayerId = snapshot.drawerPlayerId,
                 RemainingSeconds = ComputeRemainingSeconds(snapshot.stateDeadlineTimeMs, serverTimeMs),
-                Players = BuildPlayers(snapshot.players, localPlayerId, snapshot.hostPlayerId, false),
+                Players = BuildPlayers(snapshot.players, localPlayerId, snapshot.hostPlayerId, false, sequentialRelay),
                 Viewers = BuildViewers(snapshot.viewers, localPlayerId),
                 Scores = BuildScores(snapshot.scores)
             };
         }
 
-        private static MiniGamePlayerViewData[] BuildPlayers(RoomPlayerSnapshot[] players, string localPlayerId, string hostPlayerId, bool isViewer)
+        private static MiniGamePlayerViewData[] BuildPlayers(
+            RoomPlayerSnapshot[] players,
+            string localPlayerId,
+            string hostPlayerId,
+            bool isViewer,
+            SequentialRelayStateSnapshot sequentialRelay)
         {
             if (players == null || players.Length == 0)
             {
@@ -170,6 +184,9 @@ namespace NiumaMiniGame.Bridge
             for (var i = 0; i < players.Length; i++)
             {
                 var player = players[i];
+                var playerState = isViewer
+                    ? MiniGamePlayerState.Spectating
+                    : FindPlayerState(sequentialRelay, player?.playerId);
                 result[i] = new MiniGamePlayerViewData
                 {
                     PlayerId = player?.playerId,
@@ -178,7 +195,9 @@ namespace NiumaMiniGame.Bridge
                     IsConnected = player != null && player.connected,
                     IsLocalPlayer = player != null && string.Equals(player.playerId, localPlayerId, StringComparison.Ordinal),
                     IsHost = player != null && string.Equals(player.playerId, hostPlayerId, StringComparison.Ordinal),
-                    IsViewer = isViewer
+                    IsViewer = isViewer,
+                    PlayerState = playerState,
+                    PlayerStateText = ToPlayerStateText(playerState)
                 };
             }
 
@@ -204,7 +223,9 @@ namespace NiumaMiniGame.Bridge
                     IsConnected = viewer != null && viewer.connected,
                     IsLocalPlayer = viewer != null && string.Equals(viewer.playerId, localPlayerId, StringComparison.Ordinal),
                     IsHost = false,
-                    IsViewer = true
+                    IsViewer = true,
+                    PlayerState = MiniGamePlayerState.Spectating,
+                    PlayerStateText = ToPlayerStateText(MiniGamePlayerState.Spectating)
                 };
             }
 
@@ -323,6 +344,160 @@ namespace NiumaMiniGame.Bridge
                 };
         }
 
+        private static MiniGameGameplayViewData BuildGameplayViewData(
+            RoomSnapshot room,
+            SequentialRelayStateSnapshot sequentialRelay,
+            MiniGameRoomViewData roomViewData,
+            MiniGameBlackboard blackboard,
+            MiniGameChatViewData[] chats,
+            MiniGameGiftViewData[] gifts)
+        {
+            if (room == null && sequentialRelay == null)
+            {
+                return null;
+            }
+
+            var phase = ParseGameplayPhase(sequentialRelay?.phase, room?.state, blackboard.CurrentTask);
+            var localState = blackboard.IsLocalViewer
+                ? MiniGamePlayerState.Spectating
+                : FindPlayerState(sequentialRelay, blackboard.LocalPlayerId);
+            if (localState == MiniGamePlayerState.None)
+            {
+                localState = InferLocalPlayerState(phase, blackboard.CurrentTask);
+            }
+
+            var localEvaluation = FindEvaluation(sequentialRelay, blackboard.LocalPlayerId);
+            var canEvaluate = phase == MiniGameGameplayPhase.Settlement
+                              && localEvaluation != null
+                              && localEvaluation.canEvaluate
+                              && !localEvaluation.hasEvaluated;
+
+            return new MiniGameGameplayViewData
+            {
+                RoomId = room?.roomId ?? blackboard.CurrentRoomId,
+                ModeId = room?.modeId,
+                Phase = phase,
+                LocalPlayerId = blackboard.LocalPlayerId,
+                LocalPlayerState = localState,
+                CurrentDrawerPlayerId = FirstNonEmpty(sequentialRelay?.currentDrawerPlayerId, room?.drawerPlayerId),
+                CurrentDrawerDisplayName = FirstNonEmpty(sequentialRelay?.currentDrawerDisplayName, FindPlayerDisplayName(roomViewData?.Players, FirstNonEmpty(sequentialRelay?.currentDrawerPlayerId, room?.drawerPlayerId))),
+                CurrentAnswererPlayerId = sequentialRelay?.currentAnswererPlayerId,
+                CurrentAnswererDisplayName = FirstNonEmpty(sequentialRelay?.currentAnswererDisplayName, FindPlayerDisplayName(roomViewData?.Players, sequentialRelay?.currentAnswererPlayerId)),
+                VisiblePromptText = FirstNonEmpty(sequentialRelay?.promptText, BuildPromptFromTelephoneTask(blackboard.CurrentTask)),
+                PromptIsOriginalWord = sequentialRelay != null && sequentialRelay.promptIsOriginalWord,
+                VisibleAnswerText = sequentialRelay?.visibleAnswerText,
+                AnswererPlayerId = sequentialRelay?.answererPlayerId,
+                AnswererDisplayName = FirstNonEmpty(sequentialRelay?.answererDisplayName, FindPlayerDisplayName(roomViewData?.Players, sequentialRelay?.answererPlayerId)),
+                FinalOriginalWord = sequentialRelay?.originalWord,
+                FinalGuessText = sequentialRelay?.finalGuessText,
+                FinalAnswererPlayerId = sequentialRelay?.finalAnswererPlayerId,
+                FinalAnswererDisplayName = FirstNonEmpty(sequentialRelay?.finalAnswererDisplayName, FindPlayerDisplayName(roomViewData?.Players, sequentialRelay?.finalAnswererPlayerId)),
+                RemainingSeconds = ComputeRemainingSeconds(sequentialRelay?.deadlineTimeMs ?? room?.stateDeadlineTimeMs ?? 0L, blackboard.ServerTimeMs),
+                Access = BuildGameplayAccess(phase, localState, canEvaluate),
+                Players = roomViewData?.Players ?? Array.Empty<MiniGamePlayerViewData>(),
+                Chats = chats ?? Array.Empty<MiniGameChatViewData>(),
+                Gifts = gifts ?? Array.Empty<MiniGameGiftViewData>(),
+                Evaluations = BuildEvaluationViewData(sequentialRelay?.evaluations, blackboard.LocalPlayerId)
+            };
+        }
+
+        private static MiniGameGameplayAccessViewData BuildGameplayAccess(
+            MiniGameGameplayPhase phase,
+            MiniGamePlayerState localState,
+            bool canEvaluate)
+        {
+            var access = new MiniGameGameplayAccessViewData
+            {
+                DrawingBoard = MiniGameUIAccessState.Hidden,
+                BrushTools = MiniGameUIAccessState.Hidden,
+                ColorPalette = MiniGameUIAccessState.Hidden,
+                Canvas = MiniGameUIAccessState.Hidden,
+                DrawerName = MiniGameUIAccessState.Hidden,
+                FinishButton = MiniGameUIAccessState.Hidden,
+                Chat = MiniGameUIAccessState.Open,
+                Answer = MiniGameUIAccessState.Hidden,
+                Menu = MiniGameUIAccessState.Open,
+                Topic = MiniGameUIAccessState.Hidden,
+                Timer = MiniGameUIAccessState.Display,
+                PlayerList = MiniGameUIAccessState.Display,
+                DrawPrompt = MiniGameUIAccessState.Hidden,
+                AnswerPrompt = MiniGameUIAccessState.Hidden,
+                Evaluation = MiniGameUIAccessState.Hidden,
+                AgreeButton = MiniGameUIAccessState.Hidden,
+                DisagreeButton = MiniGameUIAccessState.Hidden,
+                EvaluationList = MiniGameUIAccessState.Hidden
+            };
+
+            if (phase == MiniGameGameplayPhase.Settlement)
+            {
+                access.DrawingBoard = MiniGameUIAccessState.Display;
+                access.Canvas = MiniGameUIAccessState.Display;
+                access.DrawerName = MiniGameUIAccessState.Display;
+                access.Answer = MiniGameUIAccessState.Display;
+                access.Topic = MiniGameUIAccessState.Display;
+                access.Evaluation = MiniGameUIAccessState.Display;
+                access.EvaluationList = MiniGameUIAccessState.Display;
+                access.AgreeButton = canEvaluate ? MiniGameUIAccessState.Open : MiniGameUIAccessState.Hidden;
+                access.DisagreeButton = canEvaluate ? MiniGameUIAccessState.Open : MiniGameUIAccessState.Hidden;
+                return access;
+            }
+
+            switch (localState)
+            {
+                case MiniGamePlayerState.Drawing:
+                    access.DrawingBoard = MiniGameUIAccessState.Open;
+                    access.BrushTools = MiniGameUIAccessState.Open;
+                    access.ColorPalette = MiniGameUIAccessState.Open;
+                    access.Canvas = MiniGameUIAccessState.Open;
+                    access.DrawerName = MiniGameUIAccessState.Display;
+                    access.FinishButton = MiniGameUIAccessState.Open;
+                    access.Topic = MiniGameUIAccessState.Display;
+                    access.DrawPrompt = MiniGameUIAccessState.Display;
+                    break;
+                case MiniGamePlayerState.Answering:
+                    access.DrawingBoard = MiniGameUIAccessState.Display;
+                    access.Canvas = MiniGameUIAccessState.Display;
+                    access.DrawerName = MiniGameUIAccessState.Display;
+                    access.Answer = MiniGameUIAccessState.Open;
+                    access.AnswerPrompt = MiniGameUIAccessState.Display;
+                    break;
+                case MiniGamePlayerState.Waiting:
+                case MiniGamePlayerState.Done:
+                case MiniGamePlayerState.Spectating:
+                    access.DrawingBoard = MiniGameUIAccessState.Display;
+                    access.Canvas = MiniGameUIAccessState.Display;
+                    access.DrawerName = MiniGameUIAccessState.Display;
+                    break;
+            }
+
+            return access;
+        }
+
+        private static MiniGameEvaluationViewData[] BuildEvaluationViewData(SequentialRelayEvaluationSnapshot[] evaluations, string localPlayerId)
+        {
+            if (evaluations == null || evaluations.Length == 0)
+            {
+                return Array.Empty<MiniGameEvaluationViewData>();
+            }
+
+            var result = new MiniGameEvaluationViewData[evaluations.Length];
+            for (var i = 0; i < evaluations.Length; i++)
+            {
+                var evaluation = evaluations[i];
+                result[i] = new MiniGameEvaluationViewData
+                {
+                    PlayerId = evaluation?.playerId,
+                    DisplayName = evaluation?.displayName,
+                    CanEvaluate = evaluation != null && evaluation.canEvaluate,
+                    HasEvaluated = evaluation != null && evaluation.hasEvaluated,
+                    Agreed = evaluation != null && evaluation.agreed,
+                    IsLocalPlayer = evaluation != null && string.Equals(evaluation.playerId, localPlayerId, StringComparison.Ordinal)
+                };
+            }
+
+            return result;
+        }
+
         private static MiniGameChatViewData[] BuildChatViewData(System.Collections.Generic.IReadOnlyList<RoomChatMessage> messages, string localPlayerId)
         {
             if (messages == null || messages.Count == 0)
@@ -364,6 +539,9 @@ namespace NiumaMiniGame.Bridge
                     FromDisplayName = message?.fromDisplayName,
                     ToPlayerId = message?.toPlayerId,
                     GiftType = message?.giftType,
+                    TargetModule = message?.targetModule,
+                    NormalizedX = message != null ? message.normalizedX : 0f,
+                    NormalizedY = message != null ? message.normalizedY : 0f,
                     ServerTimeMs = message != null ? message.serverTimeMs : 0L,
                     IsFromLocalPlayer = message != null && string.Equals(message.fromPlayerId, localPlayerId, StringComparison.Ordinal)
                 };
@@ -492,6 +670,168 @@ namespace NiumaMiniGame.Bridge
             {
                 Debug.LogWarning("[NiumaMiniGameUIBridge] 未找到 IMiniGameUIReceiver，UI 数据不会被展示。", this);
             }
+        }
+
+        private static MiniGameGameplayPhase ParseGameplayPhase(string sequentialPhase, string roomState, DrawTelephoneTask task)
+        {
+            var value = FirstNonEmpty(sequentialPhase, roomState);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return MiniGameGameplayPhase.None;
+            }
+
+            switch (value.Trim().ToUpperInvariant())
+            {
+                case "LOBBY": return MiniGameGameplayPhase.Lobby;
+                case "PREPARING": return MiniGameGameplayPhase.Preparing;
+                case "TOPIC_REVEAL":
+                case "TOPICREVEAL":
+                    return MiniGameGameplayPhase.TopicReveal;
+                case "DRAWING":
+                    return MiniGameGameplayPhase.Drawing;
+                case "ANSWERING":
+                    return MiniGameGameplayPhase.Answering;
+                case "REVIEW": return MiniGameGameplayPhase.Review;
+                case "VOTING": return MiniGameGameplayPhase.Voting;
+                case "SETTLEMENT": return MiniGameGameplayPhase.Settlement;
+                case "CLOSED": return MiniGameGameplayPhase.Closed;
+                case "PLAYING":
+                    var actionType = ParseTelephoneActionType(task?.actionType);
+                    if (actionType == TelephoneActionType.Draw)
+                    {
+                        return MiniGameGameplayPhase.Drawing;
+                    }
+                    if (actionType == TelephoneActionType.Guess)
+                    {
+                        return MiniGameGameplayPhase.Answering;
+                    }
+                    return MiniGameGameplayPhase.None;
+                default:
+                    return MiniGameGameplayPhase.None;
+            }
+        }
+
+        private static MiniGamePlayerState FindPlayerState(SequentialRelayStateSnapshot snapshot, string playerId)
+        {
+            if (snapshot?.playerStates == null || string.IsNullOrWhiteSpace(playerId))
+            {
+                return MiniGamePlayerState.None;
+            }
+
+            for (var i = 0; i < snapshot.playerStates.Length; i++)
+            {
+                var state = snapshot.playerStates[i];
+                if (state != null && string.Equals(state.playerId, playerId, StringComparison.Ordinal))
+                {
+                    return ParsePlayerState(state.state);
+                }
+            }
+
+            return MiniGamePlayerState.None;
+        }
+
+        private static MiniGamePlayerState ParsePlayerState(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return MiniGamePlayerState.None;
+            }
+
+            switch (value.Trim().ToUpperInvariant())
+            {
+                case "WAITING": return MiniGamePlayerState.Waiting;
+                case "DRAWING": return MiniGamePlayerState.Drawing;
+                case "ANSWERING": return MiniGamePlayerState.Answering;
+                case "DONE": return MiniGamePlayerState.Done;
+                case "SPECTATING":
+                case "VIEWER":
+                    return MiniGamePlayerState.Spectating;
+                default: return MiniGamePlayerState.None;
+            }
+        }
+
+        private static MiniGamePlayerState InferLocalPlayerState(MiniGameGameplayPhase phase, DrawTelephoneTask task)
+        {
+            var actionType = ParseTelephoneActionType(task?.actionType);
+            if (actionType == TelephoneActionType.Draw)
+            {
+                return MiniGamePlayerState.Drawing;
+            }
+            if (actionType == TelephoneActionType.Guess)
+            {
+                return MiniGamePlayerState.Answering;
+            }
+            if (phase == MiniGameGameplayPhase.Settlement || phase == MiniGameGameplayPhase.Voting || phase == MiniGameGameplayPhase.Review)
+            {
+                return MiniGamePlayerState.Done;
+            }
+
+            return MiniGamePlayerState.Waiting;
+        }
+
+        private static SequentialRelayEvaluationSnapshot FindEvaluation(SequentialRelayStateSnapshot snapshot, string playerId)
+        {
+            if (snapshot?.evaluations == null || string.IsNullOrWhiteSpace(playerId))
+            {
+                return null;
+            }
+
+            for (var i = 0; i < snapshot.evaluations.Length; i++)
+            {
+                var evaluation = snapshot.evaluations[i];
+                if (evaluation != null && string.Equals(evaluation.playerId, playerId, StringComparison.Ordinal))
+                {
+                    return evaluation;
+                }
+            }
+
+            return null;
+        }
+
+        private static string BuildPromptFromTelephoneTask(DrawTelephoneTask task)
+        {
+            if (task == null)
+            {
+                return null;
+            }
+
+            return FirstNonEmpty(task.promptWord, task.previousGuess);
+        }
+
+        private static string FindPlayerDisplayName(MiniGamePlayerViewData[] players, string playerId)
+        {
+            if (players == null || string.IsNullOrWhiteSpace(playerId))
+            {
+                return null;
+            }
+
+            for (var i = 0; i < players.Length; i++)
+            {
+                if (players[i] != null && string.Equals(players[i].PlayerId, playerId, StringComparison.Ordinal))
+                {
+                    return players[i].DisplayName;
+                }
+            }
+
+            return null;
+        }
+
+        private static string ToPlayerStateText(MiniGamePlayerState state)
+        {
+            switch (state)
+            {
+                case MiniGamePlayerState.Waiting: return "等待中";
+                case MiniGamePlayerState.Drawing: return "作画中";
+                case MiniGamePlayerState.Answering: return "回答中";
+                case MiniGamePlayerState.Done: return "已完成";
+                case MiniGamePlayerState.Spectating: return "观战中";
+                default: return string.Empty;
+            }
+        }
+
+        private static string FirstNonEmpty(string first, string second)
+        {
+            return !string.IsNullOrWhiteSpace(first) ? first : second;
         }
 
         private static MiniGameRoomState ParseRoomState(string value)

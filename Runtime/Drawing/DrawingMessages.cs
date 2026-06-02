@@ -60,6 +60,12 @@ namespace NiumaMiniGame.Drawing
     }
 
     [Serializable]
+    public sealed class ClearCanvasRequest : IRealtimeMessage
+    {
+        public string roomId;
+    }
+
+    [Serializable]
     public sealed class CanvasCleared : IRealtimeMessage
     {
         public string roomId;

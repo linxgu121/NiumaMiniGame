@@ -47,6 +47,7 @@ namespace NiumaMiniGame.Controller
         public DrawTelephoneReviewStarted CurrentReview { get; private set; }
         public DrawTelephoneVotingStarted CurrentVoting { get; private set; }
         public DrawTelephoneVotingEnded CurrentVotingResult { get; private set; }
+        public SequentialRelayStateSnapshot CurrentSequentialRelay { get; private set; }
         public GameEnded LastGameEnded { get; private set; }
 
         public IReadOnlyList<RoomChatMessage> ChatMessages => _chatMessages;
@@ -98,6 +99,7 @@ namespace NiumaMiniGame.Controller
             CurrentReview = null;
             CurrentVoting = null;
             CurrentVotingResult = null;
+            CurrentSequentialRelay = null;
             LastGameEnded = null;
             _chatMessages.Clear();
             _giftMessages.Clear();
@@ -166,7 +168,14 @@ namespace NiumaMiniGame.Controller
             {
                 CurrentRoomId = snapshot.roomId;
                 CurrentTask = snapshot.currentTask ?? CurrentTask;
+                CurrentSequentialRelay = snapshot.sequentialRelay ?? CurrentSequentialRelay;
             }
+            BumpRevision();
+        }
+
+        public void ApplySequentialRelayStateChanged(SequentialRelayStateChanged message)
+        {
+            CurrentSequentialRelay = message?.snapshot;
             BumpRevision();
         }
 

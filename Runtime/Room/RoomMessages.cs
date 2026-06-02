@@ -131,6 +131,7 @@ namespace NiumaMiniGame.Room
         public RoomViewerSnapshot[] viewers;
         public ScoreEntry[] scores;
         public DrawTelephoneTask currentTask;
+        public SequentialRelayStateSnapshot sequentialRelay;
     }
 
     [Serializable]
@@ -218,5 +219,98 @@ namespace NiumaMiniGame.Room
     {
         public string wordId;
         public string wordText;
+    }
+
+    /// <summary>
+    /// 顺序传画模式当前状态快照。
+    /// 服务端权威维护，前端只据此切换游戏中 UI。
+    /// </summary>
+    [Serializable]
+    public sealed class SequentialRelayStateSnapshot : IRealtimeMessage
+    {
+        public string phase;
+        public string currentDrawerPlayerId;
+        public string currentDrawerDisplayName;
+        public string currentAnswererPlayerId;
+        public string currentAnswererDisplayName;
+        public string promptText;
+        public bool promptIsOriginalWord;
+        public string visibleAnswerText;
+        public string answererPlayerId;
+        public string answererDisplayName;
+        public string originalWord;
+        public string finalGuessText;
+        public string finalAnswererPlayerId;
+        public string finalAnswererDisplayName;
+        public string defaultEmptyAnswerText = "未作答";
+        public long deadlineTimeMs;
+        public SequentialRelayPlayerStateSnapshot[] playerStates;
+        public SequentialRelayEvaluationSnapshot[] evaluations;
+    }
+
+    /// <summary>
+    /// 顺序传画模式中的玩家状态项。
+    /// state 使用 Waiting / Drawing / Answering / Done / Spectating。
+    /// </summary>
+    [Serializable]
+    public sealed class SequentialRelayPlayerStateSnapshot
+    {
+        public string playerId;
+        public string displayName;
+        public string state;
+    }
+
+    /// <summary>
+    /// 顺序传画结算评价项。
+    /// agreed 仅在 hasEvaluated=true 时有意义。
+    /// </summary>
+    [Serializable]
+    public sealed class SequentialRelayEvaluationSnapshot
+    {
+        public string playerId;
+        public string displayName;
+        public bool canEvaluate;
+        public bool hasEvaluated;
+        public bool agreed;
+    }
+
+    /// <summary>
+    /// 顺序传画状态变更广播。
+    /// 后端可在阶段切换、提交答案、评价变化时发送该消息。
+    /// </summary>
+    [Serializable]
+    public sealed class SequentialRelayStateChanged : IRealtimeMessage
+    {
+        public SequentialRelayStateSnapshot snapshot;
+    }
+
+    /// <summary>
+    /// 顺序传画作画完成请求。
+    /// strokeGroupId 对应当前画布笔画组，由绘画协议生成。
+    /// </summary>
+    [Serializable]
+    public sealed class SubmitSequentialDrawing : IRealtimeMessage
+    {
+        public string strokeGroupId;
+    }
+
+    /// <summary>
+    /// 顺序传画回答提交请求。
+    /// answerText 为空时后端使用默认未作答文本。
+    /// </summary>
+    [Serializable]
+    public sealed class SubmitSequentialAnswer : IRealtimeMessage
+    {
+        public string answerText;
+    }
+
+    /// <summary>
+    /// 顺序传画结算评价请求。
+    /// 第一版只做赞同 / 不赞同，不做 0-100 打分。
+    /// </summary>
+    [Serializable]
+    public sealed class SubmitSequentialEvaluation : IRealtimeMessage
+    {
+        public bool agreed;
     }
 }
