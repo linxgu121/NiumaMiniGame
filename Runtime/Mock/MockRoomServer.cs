@@ -1014,8 +1014,30 @@ namespace NiumaMiniGame.Mock
                 winnerPlayerId = FindWinnerPlayerId(room)
             });
 
-            room.State = nameof(MiniGameRoomState.Closed);
+            ReturnRoomToLobby(room);
             BroadcastRoomSnapshot(room);
+        }
+
+        private static void ReturnRoomToLobby(MockRoomRuntime room)
+        {
+            room.State = nameof(MiniGameRoomState.Lobby);
+            room.RoundIndex = 0;
+            room.MaxRoundCount = 0;
+            room.DrawerPlayerId = null;
+            room.StateEnterTimeMs = MockMiniGameTime.NowMs;
+            room.StateDeadlineTimeMs = 0L;
+            room.CurrentStageIndex = -1;
+            room.CurrentActionType = null;
+            room.CurrentTasks.Clear();
+            room.SubmittedPlayers.Clear();
+            room.ChainVotes.Clear();
+            room.Chains.Clear();
+            room.StrokeGroups.Clear();
+
+            foreach (var player in room.Players.Values)
+            {
+                player.Ready = false;
+            }
         }
 
         private static ChainVoteInfo[] BuildChainVoteInfos(MockRoomRuntime room)

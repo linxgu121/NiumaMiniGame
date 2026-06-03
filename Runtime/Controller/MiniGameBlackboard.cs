@@ -167,8 +167,19 @@ namespace NiumaMiniGame.Controller
             if (snapshot != null)
             {
                 CurrentRoomId = snapshot.roomId;
-                CurrentTask = snapshot.currentTask ?? CurrentTask;
-                CurrentSequentialRelay = snapshot.sequentialRelay ?? CurrentSequentialRelay;
+                CurrentTask = snapshot.currentTask;
+                CurrentSequentialRelay = snapshot.sequentialRelay;
+                if (IsRoomBackToLobby(snapshot.state))
+                {
+                    // 服务器回到房间大厅时，清理上一局玩法缓存，避免 UI 继续显示结算或作画状态。
+                    CurrentStage = null;
+                    CurrentTask = null;
+                    CurrentReview = null;
+                    CurrentVoting = null;
+                    CurrentVotingResult = null;
+                    CurrentSequentialRelay = null;
+                    LastGameEnded = null;
+                }
             }
             BumpRevision();
         }
@@ -286,6 +297,18 @@ namespace NiumaMiniGame.Controller
             {
                 Revision++;
             }
+        }
+
+        private static bool IsRoomBackToLobby(string state)
+        {
+            if (string.IsNullOrWhiteSpace(state))
+            {
+                return false;
+            }
+
+            var normalized = state.Trim().ToUpperInvariant();
+            return string.Equals(normalized, "LOBBY", StringComparison.Ordinal)
+                   || string.Equals(normalized, "CLOSED", StringComparison.Ordinal);
         }
     }
 }
