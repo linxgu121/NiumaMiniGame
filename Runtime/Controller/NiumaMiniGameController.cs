@@ -18,7 +18,7 @@ namespace NiumaMiniGame.Controller
     public sealed class NiumaMiniGameController : MonoBehaviour
     {
         [Header("网络客户端")]
-        [Tooltip("真实网络客户端组件。组件需要实现 IRealtimeNetworkClient；为空且启用 Mock 时会自动创建 Mock 客户端。")]
+        [Tooltip("真实网络客户端脚本。联机正式版拖 Netty/TCP 实时客户端脚本；本地测试可留空并开启 Use Mock Client，由控制器自动创建 Mock 客户端。")]
         [SerializeField] private MonoBehaviour networkClientBehaviour;
 
         [Tooltip("是否使用本地 Mock 网络客户端。真实联调 Netty 后端时关闭，并绑定真实网络客户端组件。")]
@@ -400,7 +400,7 @@ namespace NiumaMiniGame.Controller
                 _networkClient = networkClientBehaviour as IRealtimeNetworkClient;
                 if (_networkClient == null && logWarnings)
                 {
-                    Debug.LogWarning("[NiumaMiniGame] networkClientBehaviour 未实现 IRealtimeNetworkClient。", this);
+                    Debug.LogWarning("[NiumaMiniGame] NetworkClient 绑定的不是实时网络客户端脚本。正式联机请拖 Netty/TCP 客户端脚本；本地测试可留空并开启 Use Mock Client。", this);
                 }
             }
 

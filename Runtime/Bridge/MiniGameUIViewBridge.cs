@@ -22,7 +22,7 @@ namespace NiumaMiniGame.Bridge
         [Tooltip("MiniGame 根控制器。为空时可自动在场景中查找。")]
         [SerializeField] private NiumaMiniGameController miniGameController;
 
-        [Tooltip("实现 IMiniGameUIReceiver 的组件。为空时会尝试在当前物体上查找。")]
+        [Tooltip("UI 接收脚本。开始/房间界面拖 MiniGameStartScreenUI；游戏进行中界面拖 MiniGameGameplayScreenUI；调试场景可拖 MiniGameUIDebugReceiver。为空时会尝试在当前物体上查找。")]
         [SerializeField] private MonoBehaviour miniGameUIReceiverProvider;
 
         [Header("刷新")]

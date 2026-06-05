@@ -30,7 +30,7 @@ namespace NiumaMiniGame.GalBridge
         [Tooltip("当前场景中的 NiumaDialogueController。启用时会把本组件注册为 DialogueService 的行为处理器。")]
         [SerializeField] private NiumaDialogueController dialogueController;
 
-        [Tooltip("备用行为处理器。当前组件不认识的 Action 会先转交给它，方便以后接 Quest / Story / Audio 等处理器。")]
+        [Tooltip("备用行为处理脚本。用于继续处理本脚本不认识的对话行为，例如任务、剧情、音频桥接脚本；没有其它行为时可留空。")]
         [SerializeField] private MonoBehaviour fallbackActionHandlerProvider;
 
         [Tooltip("启用组件时是否自动注册到 DialogueService。正式场景建议开启。")]
@@ -256,7 +256,7 @@ namespace NiumaMiniGame.GalBridge
             _fallbackActionHandler = fallbackActionHandlerProvider as IDialogueActionHandler;
             if (fallbackActionHandlerProvider != null && _fallbackActionHandler == null)
             {
-                LogWarning("备用行为处理器没有实现 IDialogueActionHandler。", warn);
+                LogWarning("备用行为处理脚本绑定不正确，请拖任务、剧情、音频等 Dialogue 行为桥接脚本；没有其它行为时可留空。", warn);
             }
         }
 

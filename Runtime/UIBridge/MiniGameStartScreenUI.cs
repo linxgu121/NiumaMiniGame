@@ -65,22 +65,22 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("开始界面根节点。为空时不主动控制显示隐藏。")]
         [SerializeField] private GameObject startRoot;
 
-        [Tooltip("未进入房间时显示的创建 / 加入面板。")]
+        [Tooltip("旧版兼容面板：未进入房间时显示创建 / 加入。新版流程请优先使用 Home / Naming / Prepare / RoomInput。")]
         [SerializeField] private GameObject entryPanel;
 
-        [Tooltip("进入房间后显示的房间大厅面板。")]
+        [Tooltip("房间大厅面板：进入房间后显示房间号、玩家、观战者、聊天、准备、开始游戏等内容。")]
         [SerializeField] private GameObject roomPanel;
 
-        [Tooltip("入口页：显示“开始游戏”和“退出游戏”。为空时使用旧版 entryPanel 流程。")]
+        [Tooltip("入口页：显示“开始游戏”和“退出游戏”。正式新版 UI 必填；为空时仅作为旧版兼容，使用 entryPanel 流程。")]
         [SerializeField] private GameObject homePanel;
 
-        [Tooltip("取名页：玩家点击开始游戏后输入昵称。为空时会直接进入预备页。")]
+        [Tooltip("取名页：玩家点击开始游戏后输入昵称，并带返回按钮。为空时会直接进入预备页。")]
         [SerializeField] private GameObject namingPanel;
 
-        [Tooltip("预备页：显示创建房间、加入房间、观战加入、返回。为空时复用旧版 entryPanel。")]
+        [Tooltip("预备页：显示创建房间、加入房间、观战加入、返回。正式新版 UI 必填；为空时复用旧版 entryPanel。")]
         [SerializeField] private GameObject preparePanel;
 
-        [Tooltip("房间号输入页：加入房间和观战加入共用。为空时点击加入按钮会沿用旧版直接加入逻辑。")]
+        [Tooltip("房间号输入页：加入房间和观战加入共用，必须带进入和返回按钮。为空时点击加入按钮会沿用旧版直接加入逻辑。")]
         [SerializeField] private GameObject roomInputPanel;
 
         [Tooltip("房主专用控件根节点：模式切换、开始游戏等。")]
@@ -124,10 +124,13 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("取消准备按钮。")]
         [SerializeField] private Button unreadyButton;
 
-        [Tooltip("离开房间按钮。")]
+        [Tooltip("房间页返回按钮。点击后离开当前房间并回到预备页，不返回 RPG 场景。")]
         [SerializeField] private Button leaveRoomButton;
 
-        [Tooltip("退出小游戏并返回上一场景按钮。若留空，可勾选“离开房间后返回上一场景”复用离开房间按钮。")]
+        [Tooltip("退出游戏按钮。点击后会离开房间并返回 RPG 场景；入口页、预备页、房间页都可以共用这个按钮。")]
+        [SerializeField] private Button exitGameButton;
+
+        [Tooltip("旧版兼容：退出小游戏并返回上一场景按钮。新版 UI 请优先绑定 ExitGameButton。")]
         [SerializeField] private Button returnSceneButton;
 
         [Tooltip("发送聊天按钮。")]
@@ -142,14 +145,17 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("取名页返回按钮。点击后回到入口页。")]
         [SerializeField] private Button namingBackButton;
 
-        [Tooltip("预备页返回按钮。点击后回到入口页。")]
+        [Tooltip("预备页返回按钮。点击后回到入口页，不退出小游戏。")]
         [SerializeField] private Button prepareBackButton;
 
         [Tooltip("房间号输入页进入按钮。根据当前入口区分玩家加入或观战加入。")]
         [SerializeField] private Button roomInputEnterButton;
 
-        [Tooltip("房间号输入页返回按钮。点击后回到预备页。")]
+        [Tooltip("房间号输入页返回按钮。点击后回到预备页，不退出小游戏。")]
         [SerializeField] private Button roomInputBackButton;
+
+        [Tooltip("房间页返回按钮。作用等同 LeaveRoomButton：离开当前房间并回到预备页，不返回 RPG 场景。")]
+        [SerializeField] private Button roomBackButton;
 
         [Tooltip("房主开始游戏按钮。点击后发送 StartGameRequest，由后端统一校验人数和模式规则。")]
         [SerializeField] private Button hostStartGameButton;
@@ -167,7 +173,7 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("玩家列表文本。")]
         [SerializeField] private TMP_Text playersText;
 
-        [Tooltip("观战者列表文本。")]
+        [Tooltip("观战者列表文本。建议在房间大厅单独放一块文本显示观战者昵称。")]
         [SerializeField] private TMP_Text viewersText;
 
         [Tooltip("提示文本，用于显示当前可执行操作。")]
@@ -185,7 +191,7 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("当前房间玩家数量显示文本。")]
         [SerializeField] private TMP_Text playerCountText;
 
-        [Tooltip("昵称列表文本。")]
+        [Tooltip("昵称列表文本。用于显示房间内所有人：玩家列表 + 观战者列表。若想分开显示，也可以同时绑定 PlayersText 和 ViewersText。")]
         [SerializeField] private TMP_Text nicknameListText;
 
         [Tooltip("聊天记录文本。")]
@@ -208,7 +214,7 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("本地短提示显示秒数。")]
         [SerializeField] private float toastSeconds = 2f;
 
-        [Tooltip("点击离开房间按钮后，是否同时调用 NiumaScene.ReturnToPreviousScene 返回 RPG 场景。")]
+        [Tooltip("旧版兼容开关：点击 LeaveRoomButton 后同时返回 RPG 场景。新版 UI 不建议开启，请改绑 ExitGameButton 负责退出游戏。")]
         [SerializeField] private bool returnToPreviousSceneAfterLeaveRoom;
 
         [Header("玩法场景跳转")]
@@ -616,7 +622,7 @@ namespace NiumaMiniGame.UIBridge
                 SetText(roomText, BuildRoomSummary(panel.Room, panel.IsLocalViewer));
                 SetText(roomIdText, $"房间号：{panel.Room.RoomId}");
                 SetText(playerCountText, $"当前人数：{CountPlayers(panel.Room.Players)}");
-                SetText(nicknameListText, BuildPlayerList("昵称列表", panel.Room.Players));
+                SetText(nicknameListText, BuildRoomMemberList(panel.Room));
                 SetText(playersText, BuildPlayerList("玩家", panel.Room.Players));
                 SetText(viewersText, BuildPlayerList("观战", panel.Room.Viewers));
                 SetText(chatMessagesText, BuildChatList(panel.Chats));
@@ -642,6 +648,8 @@ namespace NiumaMiniGame.UIBridge
             SetInteractable(readyButton, connected && hasRoom && inLobby && !isViewer && !isHost);
             SetInteractable(unreadyButton, connected && hasRoom && inLobby && !isViewer && !isHost);
             SetInteractable(leaveRoomButton, connected && hasRoom);
+            SetInteractable(roomBackButton, connected && hasRoom);
+            SetInteractable(exitGameButton, true);
             SetInteractable(returnSceneButton, true);
             SetInteractable(sendChatButton, connected && hasRoom);
             SetInteractable(enterGameButton, !hasRoom);
@@ -698,6 +706,61 @@ namespace NiumaMiniGame.UIBridge
             }
 
             return _builder.ToString();
+        }
+
+        private string BuildRoomMemberList(MiniGameRoomViewData room)
+        {
+            _builder.Clear();
+            _builder.Append("房间成员");
+
+            AppendMemberGroup("玩家", room?.Players);
+            AppendMemberGroup("观战者", room?.Viewers);
+
+            return _builder.ToString();
+        }
+
+        private void AppendMemberGroup(string title, MiniGamePlayerViewData[] members)
+        {
+            _builder.AppendLine();
+            _builder.Append(title).Append("：");
+
+            if (members == null || members.Length == 0)
+            {
+                _builder.Append("无");
+                return;
+            }
+
+            for (var i = 0; i < members.Length; i++)
+            {
+                var member = members[i];
+                if (member == null)
+                {
+                    continue;
+                }
+
+                _builder.AppendLine();
+                _builder.Append(member.IsLocalPlayer ? "我 " : "- ");
+                _builder.Append(string.IsNullOrWhiteSpace(member.DisplayName) ? ShortId(member.PlayerId) : member.DisplayName);
+
+                if (member.IsViewer)
+                {
+                    _builder.Append("  观战者");
+                }
+                else
+                {
+                    if (member.IsHost)
+                    {
+                        _builder.Append("  房主");
+                    }
+
+                    _builder.Append(member.IsReady ? "  已准备" : "  未准备");
+                }
+
+                if (!member.IsConnected)
+                {
+                    _builder.Append("  离线");
+                }
+            }
         }
 
         private string BuildChatList(MiniGameChatViewData[] chats)
@@ -1014,6 +1077,8 @@ namespace NiumaMiniGame.UIBridge
             BindButton(readyButton, ClickReady);
             BindButton(unreadyButton, ClickUnready);
             BindButton(leaveRoomButton, ClickLeaveRoom);
+            BindButton(roomBackButton, ClickLeaveRoom);
+            BindButton(exitGameButton, ClickReturnToPreviousScene);
             BindButton(returnSceneButton, ClickReturnToPreviousScene);
             BindButton(sendChatButton, ClickSendChat);
             BindButton(enterGameButton, ClickEnterGame);
@@ -1035,6 +1100,8 @@ namespace NiumaMiniGame.UIBridge
             UnbindButton(readyButton, ClickReady);
             UnbindButton(unreadyButton, ClickUnready);
             UnbindButton(leaveRoomButton, ClickLeaveRoom);
+            UnbindButton(roomBackButton, ClickLeaveRoom);
+            UnbindButton(exitGameButton, ClickReturnToPreviousScene);
             UnbindButton(returnSceneButton, ClickReturnToPreviousScene);
             UnbindButton(sendChatButton, ClickSendChat);
             UnbindButton(enterGameButton, ClickEnterGame);
