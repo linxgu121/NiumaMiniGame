@@ -221,6 +221,9 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("真正你画我猜玩法场景名。为空时，房间状态进入 Playing 后不会自动切场景。")]
         [SerializeField] private string gameplaySceneName;
 
+        [Tooltip("返回上下文缺失时兜底加载的 RPG 场景名。正式流程应由 NiumaScene 的 ReturnContext 返回；直接从 Unity 打开 MiniGame 场景测试时可填写外部 RPG 场景名。")]
+        [SerializeField] private string fallbackReturnSceneName;
+
         [Tooltip("房间状态离开 Lobby 后，是否自动切到真正玩法场景。")]
         [SerializeField] private bool loadGameplaySceneWhenGameStarts;
 
@@ -1255,6 +1258,50 @@ namespace NiumaMiniGame.UIBridge
             if (handle.IsDone && (handle.Result == null || !handle.Result.Succeeded) && logWarnings)
             {
                 Debug.LogWarning($"[MiniGameStartScreenUI] 返回上一场景失败：{handle.Result?.ErrorCode} {handle.Result?.ErrorMessage}", this);
+            }
+
+            if (handle.IsDone &&
+                handle.Result != null &&
+                !handle.Result.Succeeded &&
+                handle.Result.ErrorCode == SceneLoadErrorCode.ReturnContextMissing)
+            {
+                LoadFallbackReturnScene();
+            }
+        }
+
+        private void LoadFallbackReturnScene()
+        {
+            if (string.IsNullOrWhiteSpace(fallbackReturnSceneName))
+            {
+                if (logWarnings)
+                {
+                    Debug.LogWarning("[MiniGameStartScreenUI] 没有可返回的场景上下文，也未配置 fallbackReturnSceneName。请从 RPG 入口进入 MiniGame，或在开始界面配置兜底 RPG 场景名。", this);
+                }
+
+                return;
+            }
+
+            var fallbackHandle = sceneController.LoadScene(new SceneTransitionRequest
+            {
+                Purpose = SceneLoadPurpose.MiniGame,
+                Target = new SceneTransitionTarget(fallbackReturnSceneName.Trim()),
+                ReturnPolicy = new SceneReturnPolicy
+                {
+                    PushReturnContext = false
+                },
+                Options = new SceneTransitionOptions
+                {
+                    FreezeInputDuringLoad = freezeInputDuringReturn,
+                    ShowLoadingUI = showLoadingUIOnReturn,
+                    ReplacePendingRequest = true
+                }
+            });
+
+            if (fallbackHandle.IsDone &&
+                (fallbackHandle.Result == null || !fallbackHandle.Result.Succeeded) &&
+                logWarnings)
+            {
+                Debug.LogWarning($"[MiniGameStartScreenUI] 兜底返回场景失败：{fallbackHandle.Result?.ErrorCode} {fallbackHandle.Result?.ErrorMessage}", this);
             }
         }
 
