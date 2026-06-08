@@ -48,4 +48,50 @@ NiumaMiniGame 是联机小游戏前端模块，当前核心玩法为你画我猜
 ## 协作边界
 MiniGame 不直接操作 RPG 玩家控制和存档。场景切换交给 NiumaScene，入口选择交给 NiumaGal，联机权威状态由后端房间状态机托管。
 
+## 场景挂载与 Inspector 配置
+### NiumaMiniGameController
+建议挂载位置：`CoreScene/BootstrapRoot/MiniGameSessionRoot`。如果 MiniGame 只有一个独立场景，也可以先放在 MiniGame 开始场景。
+
+用途：管理连接、PlayerId、RoomId、房间快照、聊天、准备、开始游戏和网络客户端。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `Network Client Provider` | 拖 Mock 或真实网络客户端脚本 | 不可以 | 无法连接房间服务 |
+| `Display Name` | 默认昵称，可由 UI 输入覆盖 | 可以 | 为空时可能显示短 PlayerId |
+| `Default Room Id / Mode Id` | 测试时可填 | 可以 | UI 创建/加入时会用输入框覆盖 |
+| `Auto Connect On Start` | 测试可开，正式通常由按钮触发 | 可以 | 关闭后需要 UI 按钮调用 Connect |
+| `Register Service To Context` | 核心场景可开 | 可以 | 其他模块无法通过 GameContext 获取 MiniGame 服务 |
+
+### MiniGameUIViewBridge
+建议挂载位置：`MiniGameSessionRoot` 或 MiniGame UI 根节点。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `MiniGame Controller` | 拖 `NiumaMiniGameController` | 不建议 | UI 不刷新 |
+| `Mini Game UI Receiver Provider` | 拖 `MiniGameStartScreenUI` 或游戏中 UI 接收脚本 | 不可以 | 房间数据无处显示 |
+
+### MiniGameStartScreenUI
+建议挂载位置：MiniGame 开始场景的 UI 根物体。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `MiniGame Controller` | 拖 `NiumaMiniGameController` | 不建议 | 按钮无法操作房间 |
+| `Scene Controller` | 拖核心场景 `NiumaSceneController` | 退出/切玩法场景时不建议 | 退出游戏、进入玩法场景会失败 |
+| `Home / Naming / Prepare / RoomInput / Room Panel` | 拖对应 UI 根节点 | 按流程决定 | 留空会走兼容流程或不控制该页显示 |
+| `Exit Game Button` | 拖退出 MiniGame 回 RPG 的按钮 | 可以 | 需要手动绑定事件 |
+| `Back Buttons` | 拖返回上一个 MiniGame 页面按钮 | 可以 | 页面返回需要手动处理 |
+| `Gameplay Scene Name` | 填游戏中场景名 | 分场景玩法不可以 | 房间进入 Playing 后不会自动切玩法场景 |
+| `Fallback Return Scene Name` | 测试时填 RPG 场景名 | 可以 | 没有 ReturnContext 时无法退出回 RPG |
+
+### MiniGameDialogueActionHandler
+建议挂载位置：RPG 中 MiniGame NPC 所在场景，或 Gal 行为桥接根物体。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `Dialogue Controller` | 拖 `NiumaDialogueController` | 不建议 | 无法注册 OpenMiniGame 行为 |
+| `Scene Controller` | 拖 `NiumaSceneController` | 不建议 | 无法切到 MiniGame 场景 |
+| `Default MiniGame Scene Name` | 填 MiniGame 开始场景名 | 不可以 | 对话 Action 未指定场景时无法进入小游戏 |
+| `Default Return Spawn Point Id` | 填 NPC 附近返回点 | 建议填写 | 返回 RPG 时可能落到默认点 |
+| `Push Return Context` | RPG 进入 MiniGame 必须开启 | 不建议关闭 | 退出 MiniGame 会 ReturnContextMissing |
+
 
