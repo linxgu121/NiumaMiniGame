@@ -50,22 +50,22 @@ namespace NiumaMiniGame.GalBridge
         [Tooltip("你画我猜开始界面的场景名。DialogueAction.StringValue / TargetId / CustomData(sceneName) 可覆盖该值。")]
         [SerializeField] private string defaultMiniGameSceneName = "MiniGame_DrawTelephone";
 
-        [Tooltip("从小游戏返回 RPG 场景时使用的出生点 ID。建议填 NPC 附近的 SceneSpawnPoint。")]
+        [Tooltip("从小游戏返回 RPG 场景时使用的出生点 ID（建议填 NPC 附近的 SceneSpawnPoint，例如 npc_minigame_exit）。")]
         [SerializeField] private string defaultReturnSpawnPointId = "npc_minigame_exit";
 
-        [Tooltip("进入小游戏前是否压入返回上下文。RPG -> MiniGame -> RPG 流程应开启。")]
+        [Tooltip("进入小游戏前是否压入返回上下文（RPG→MiniGame→RPG 必须开启；直接打开 MiniGame 测试场景可关闭并使用兜底返回场景）。")]
         [SerializeField] private bool pushReturnContext = true;
 
-        [Tooltip("进入小游戏前是否请求检查点保存。第一版只发出意图，具体保存由 NiumaScene / NiumaSave 桥接处理。")]
+        [Tooltip("进入小游戏前是否请求检查点保存（剧情入口/重要节点可开启；纯调试入口可关闭）。第一版只发出意图，具体保存由 NiumaScene / NiumaSave 桥接处理。")]
         [SerializeField] private bool requestCheckpointSave;
 
-        [Tooltip("场景加载期间是否冻结玩家输入。")]
+        [Tooltip("场景加载期间是否冻结玩家输入（从 3D RPG 进入小游戏建议开启，避免切场景时角色继续移动）。")]
         [SerializeField] private bool freezeInputDuringLoad = true;
 
-        [Tooltip("场景加载期间是否显示 Loading UI。")]
+        [Tooltip("场景加载期间是否显示 Loading UI（正式切换建议开启；快速调试可关闭）。")]
         [SerializeField] private bool showLoadingUI = true;
 
-        [Tooltip("场景加载方式。NiumaScene 第一版会统一规整为 Single，这里保留给团队理解入口配置。")]
+        [Tooltip("场景加载方式。Single（切换到 MiniGame，会卸载当前业务场景；正式入口推荐）；Additive（叠加加载，适合核心场景/子场景；NiumaScene 第一版会规整为 Single）。")]
         [SerializeField] private LoadSceneMode loadSceneMode = LoadSceneMode.Single;
 
         [Header("容错")]

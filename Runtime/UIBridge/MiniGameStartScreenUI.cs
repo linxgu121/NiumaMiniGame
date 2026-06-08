@@ -218,28 +218,28 @@ namespace NiumaMiniGame.UIBridge
         [SerializeField] private bool returnToPreviousSceneAfterLeaveRoom;
 
         [Header("玩法场景跳转")]
-        [Tooltip("真正你画我猜玩法场景名。为空时，房间状态进入 Playing 后不会自动切场景。")]
+        [Tooltip("真正你画我猜玩法场景名（开始/房间场景 → 游戏中 UI 场景；为空时房间进入 Playing 后不会自动切场景）。")]
         [SerializeField] private string gameplaySceneName;
 
-        [Tooltip("返回上下文缺失时兜底加载的 RPG 场景名。正式流程应由 NiumaScene 的 ReturnContext 返回；直接从 Unity 打开 MiniGame 场景测试时可填写外部 RPG 场景名。")]
+        [Tooltip("返回上下文缺失时兜底加载的 RPG 场景名（直接从 Unity 打开 MiniGame 场景测试时填写；正式 RPG 入口通常依赖 ReturnContext）。")]
         [SerializeField] private string fallbackReturnSceneName;
 
-        [Tooltip("房间状态离开 Lobby 后，是否自动切到真正玩法场景。")]
+        [Tooltip("房间状态离开 Lobby 后，是否自动切到真正玩法场景（开始场景和游戏中场景分离时开启；共用一个场景时关闭）。")]
         [SerializeField] private bool loadGameplaySceneWhenGameStarts;
 
-        [Tooltip("进入玩法场景时是否压入返回上下文，便于玩法场景结束后回到开始 / 房间场景。")]
+        [Tooltip("进入玩法场景时是否压入返回上下文（MiniGame_Start→MiniGame_Gameplay 后需要回房间/开始页时开启；单场景玩法可关闭）。")]
         [SerializeField] private bool pushReturnContextWhenEnterGameplay = true;
 
-        [Tooltip("进入玩法场景时是否冻结输入。")]
+        [Tooltip("进入玩法场景时是否冻结输入（切换到游戏中 UI 场景时建议开启）。")]
         [SerializeField] private bool freezeInputWhenEnterGameplay = true;
 
-        [Tooltip("进入玩法场景时是否显示 Loading UI。")]
+        [Tooltip("进入玩法场景时是否显示 Loading UI（跨场景加载建议开启；同场景 UI 切页可关闭）。")]
         [SerializeField] private bool showLoadingUIWhenEnterGameplay = true;
 
-        [Tooltip("返回上一场景时是否冻结输入。")]
+        [Tooltip("返回上一场景时是否冻结输入（退出 MiniGame 回 RPG 时建议开启）。")]
         [SerializeField] private bool freezeInputDuringReturn = true;
 
-        [Tooltip("返回上一场景时是否请求显示 Loading UI。第七阶段接入 LoadingPanel 后生效。")]
+        [Tooltip("返回上一场景时是否请求显示 Loading UI（退出 MiniGame 回 RPG 时建议开启；第七阶段接入 LoadingPanel 后生效）。")]
         [SerializeField] private bool showLoadingUIOnReturn = true;
 
         [Tooltip("为 true 时，开始界面显示期间解锁并显示鼠标，避免从 3D 场景切入后鼠标仍被 TPC 锁定。")]
