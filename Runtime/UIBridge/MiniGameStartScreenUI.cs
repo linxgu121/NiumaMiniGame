@@ -61,12 +61,9 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("为 true 时，启用组件会自动查找未绑定的 NiumaMiniGameController。正式场景建议手动绑定。")]
         [SerializeField] private bool autoFindController = true;
 
-        [Header("面板节点")]
+        [Header("面板节点 - 新版分页流程")]
         [Tooltip("开始界面根节点。为空时不主动控制显示隐藏。")]
         [SerializeField] private GameObject startRoot;
-
-        [Tooltip("旧版兼容面板：未进入房间时显示创建 / 加入。新版流程请优先使用 Home / Naming / Prepare / RoomInput。")]
-        [SerializeField] private GameObject entryPanel;
 
         [Tooltip("房间大厅面板：进入房间后显示房间号、玩家、观战者、聊天、准备、开始游戏等内容。")]
         [SerializeField] private GameObject roomPanel;
@@ -83,6 +80,7 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("房间号输入页：加入房间和观战加入共用，必须带进入和返回按钮。为空时点击加入按钮会沿用旧版直接加入逻辑。")]
         [SerializeField] private GameObject roomInputPanel;
 
+        [Header("面板节点 - 房间身份控件")]
         [Tooltip("房主专用控件根节点：模式切换、开始游戏等。")]
         [SerializeField] private GameObject hostRoomControls;
 
@@ -99,62 +97,51 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("房间 ID 输入框。加入房间或观战时使用。")]
         [SerializeField] private TMP_InputField roomIdInput;
 
-        [Tooltip("模式 ID 输入框。为空时使用 draw_telephone。")]
-        [SerializeField] private TMP_InputField modeIdInput;
-
         [Tooltip("聊天输入框。第一版只在已进入房间后发送普通房间聊天。")]
         [SerializeField] private TMP_InputField chatInput;
 
-        [Header("按钮")]
-        [Tooltip("连接按钮。Mock 模式下也需要连接，连接后才能创建或加入房间。")]
-        [SerializeField] private Button connectButton;
-
-        [Tooltip("创建房间按钮。")]
-        [SerializeField] private Button createRoomButton;
-
-        [Tooltip("作为玩家加入房间按钮。")]
-        [SerializeField] private Button joinRoomButton;
-
-        [Tooltip("作为观战者加入房间按钮。")]
-        [SerializeField] private Button joinAsViewerButton;
-
-        [Tooltip("准备按钮。房间人数满足后，所有玩家准备即可进入游戏流程。")]
-        [SerializeField] private Button readyButton;
-
-        [Tooltip("取消准备按钮。")]
-        [SerializeField] private Button unreadyButton;
-
-        [Tooltip("房间页返回按钮。点击后离开当前房间并回到预备页，不返回 RPG 场景。")]
-        [SerializeField] private Button leaveRoomButton;
+        [Header("按钮 - 入口页 HomePanel")]
+        [Tooltip("入口页“开始游戏”按钮。点击后进入取名页；未绑定取名页时直接进入预备页。")]
+        [SerializeField] private Button enterGameButton;
 
         [Tooltip("退出游戏按钮。点击后会离开房间并返回 RPG 场景；入口页、预备页、房间页都可以共用这个按钮。")]
         [SerializeField] private Button exitGameButton;
 
-        [Tooltip("旧版兼容：退出小游戏并返回上一场景按钮。新版 UI 请优先绑定 ExitGameButton。")]
-        [SerializeField] private Button returnSceneButton;
-
-        [Tooltip("发送聊天按钮。")]
-        [SerializeField] private Button sendChatButton;
-
-        [Tooltip("入口页“开始游戏”按钮。点击后进入取名页，未绑定取名页时直接进入预备页。")]
-        [SerializeField] private Button enterGameButton;
-
+        [Header("按钮 - 取名页 NamingPanel")]
         [Tooltip("取名页确认按钮。点击后写入昵称并进入预备页。")]
         [SerializeField] private Button confirmNameButton;
 
         [Tooltip("取名页返回按钮。点击后回到入口页。")]
         [SerializeField] private Button namingBackButton;
 
+        [Header("按钮 - 预备页 PreparePanel")]
+        [Tooltip("创建房间按钮。点击后自动连接并创建房间。")]
+        [SerializeField] private Button createRoomButton;
+
+        [Tooltip("作为玩家加入房间按钮。点击后进入房间号输入页。")]
+        [SerializeField] private Button joinRoomButton;
+
+        [Tooltip("作为观战者加入房间按钮。点击后进入房间号输入页，并以观战身份加入。")]
+        [SerializeField] private Button joinAsViewerButton;
+
         [Tooltip("预备页返回按钮。点击后回到入口页，不退出小游戏。")]
         [SerializeField] private Button prepareBackButton;
 
+        [Header("按钮 - 房间号输入页 RoomInputPanel")]
         [Tooltip("房间号输入页进入按钮。根据当前入口区分玩家加入或观战加入。")]
         [SerializeField] private Button roomInputEnterButton;
 
         [Tooltip("房间号输入页返回按钮。点击后回到预备页，不退出小游戏。")]
         [SerializeField] private Button roomInputBackButton;
 
-        [Tooltip("房间页返回按钮。作用等同 LeaveRoomButton：离开当前房间并回到预备页，不返回 RPG 场景。")]
+        [Header("按钮 - 房间大厅 RoomPanel")]
+        [Tooltip("准备按钮。普通玩家点击后进入已准备状态；房主不使用该按钮。")]
+        [SerializeField] private Button readyButton;
+
+        [Tooltip("取消准备按钮。普通玩家点击后取消准备；房主不使用该按钮。")]
+        [SerializeField] private Button unreadyButton;
+
+        [Tooltip("房间页返回按钮。点击后离开当前房间并回到预备页，不返回 RPG。新版 UI 只绑定这个，不再绑定 LeaveRoomButton。")]
         [SerializeField] private Button roomBackButton;
 
         [Tooltip("房主开始游戏按钮。点击后发送 StartGameRequest，由后端统一校验人数和模式规则。")]
@@ -162,6 +149,16 @@ namespace NiumaMiniGame.UIBridge
 
         [Tooltip("模式选择按钮。房间外只修改待创建模式；房间内由房主发送 ChangeModeRequest。")]
         [SerializeField] private Button modeSelectButton;
+
+        [Tooltip("发送聊天按钮。")]
+        [SerializeField] private Button sendChatButton;
+
+        [Header("可选调试按钮")]
+        [Tooltip("可选：手动连接按钮。正常新版流程中，创建/加入房间会自动连接；只有需要单独测试连接状态时才绑定。")]
+        [SerializeField] private Button connectButton;
+
+        [Tooltip("可选：模式 ID 输入框。正式新版 UI 推荐用 ModeOptions + ModeSelectButton，不建议让策划在界面上手填 modeId。")]
+        [SerializeField] private TMP_InputField modeIdInput;
 
         [Header("文本显示")]
         [Tooltip("连接状态文本。")]
@@ -214,9 +211,6 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("本地短提示显示秒数。")]
         [SerializeField] private float toastSeconds = 2f;
 
-        [Tooltip("旧版兼容开关：点击 LeaveRoomButton 后同时返回 RPG 场景。新版 UI 不建议开启，请改绑 ExitGameButton 负责退出游戏。")]
-        [SerializeField] private bool returnToPreviousSceneAfterLeaveRoom;
-
         [Header("玩法场景跳转")]
         [Tooltip("真正你画我猜玩法场景名（开始/房间场景 → 游戏中 UI 场景；为空时房间进入 Playing 后不会自动切场景）。")]
         [SerializeField] private string gameplaySceneName;
@@ -247,6 +241,19 @@ namespace NiumaMiniGame.UIBridge
 
         [Tooltip("为 true 时，缺少引用或 EventSystem 时输出警告。")]
         [SerializeField] private bool logWarnings = true;
+
+        // 旧版兼容字段保留序列化，避免旧场景丢失引用；新版 UI 不再在 Inspector 暴露，减少策划误绑。
+        [HideInInspector]
+        [SerializeField] private GameObject entryPanel;
+
+        [HideInInspector]
+        [SerializeField] private Button leaveRoomButton;
+
+        [HideInInspector]
+        [SerializeField] private Button returnSceneButton;
+
+        [HideInInspector]
+        [SerializeField] private bool returnToPreviousSceneAfterLeaveRoom;
 
         private readonly StringBuilder _builder = new StringBuilder(512);
         private CursorLockMode _previousLockMode;

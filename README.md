@@ -30,13 +30,14 @@ NiumaMiniGame 是联机小游戏前端模块，当前核心玩法为你画我猜
 - RPG 场景 `NPC_MiniGame`：对话选项配置 OpenMiniGame Action。
 - RPG 场景 `MiniGameGalBridge`：挂 `MiniGameDialogueActionHandler`，绑定 NiumaDialogueController 和 NiumaSceneController。
 - MiniGame 开始/房间场景 `MiniGameRoot`：挂 `NiumaMiniGameController`，绑定 IRealtimeNetworkClient 实现或 MockRealtimeNetworkClient。
-- `MiniGameUIRoot/StartScreen`：挂 `MiniGameStartScreenUI`，新版流程绑定一套页面即可：`HomePanel` 入口页、`NamingPanel` 取名页、`PreparePanel` 预备页、`RoomInputPanel` 房间号输入页、`RoomPanel` 房间大厅页。`EntryPanel` 只用于旧版兼容，新 UI 不建议再绑。
+- `MiniGameUIRoot/StartScreen`：挂 `MiniGameStartScreenUI`，新版流程只绑定一套页面：`HomePanel` 入口页、`NamingPanel` 取名页、`PreparePanel` 预备页、`RoomInputPanel` 房间号输入页、`RoomPanel` 房间大厅页。旧版 `EntryPanel / LeaveRoomButton / ReturnSceneButton` 已隐藏保留兼容，新 UI 不需要再绑定。
 - `MiniGameUIRoot/StartScreen` 场景跳转配置：绑定 `SceneController` 为全局 `NiumaSceneController`；`Fallback Return Scene Name` 填外部 RPG 场景名，例如 `TestSence1`。正式从 RPG 入口进入时会走 ReturnContext；直接打开 MiniGame 场景测试时会用该兜底场景。
-- `MiniGameUIRoot/StartScreen/HomePanel`：放“开始游戏”和“退出游戏”。开始游戏按钮绑 `EnterGameButton`，退出游戏按钮绑 `ExitGameButton`，退出游戏会先调用 `NiumaSceneController.ReturnToPreviousScene()` 返回 RPG；若报 `ReturnContextMissing`，则加载 `Fallback Return Scene Name`。
-- `MiniGameUIRoot/StartScreen/NamingPanel`：放昵称输入框、确认按钮和返回按钮。确认按钮绑 `ConfirmNameButton`，返回按钮绑 `NamingBackButton`。
-- `MiniGameUIRoot/StartScreen/PreparePanel`：放创建房间、加入房间、观战加入和返回按钮。返回按钮绑 `PrepareBackButton`，只返回入口页，不退出小游戏。
-- `MiniGameUIRoot/StartScreen/RoomInputPanel`：放房间号输入框、进入按钮和返回按钮。进入按钮绑 `RoomInputEnterButton`，返回按钮绑 `RoomInputBackButton`。
-- `MiniGameUIRoot/StartScreen/RoomPanel`：放房间号、当前玩家数量、玩家昵称列表、观战者昵称列表、聊天框、房主开始游戏、普通玩家准备、房间返回和退出游戏。房间返回按钮绑 `RoomBackButton` 或 `LeaveRoomButton`，只离开房间回预备页；退出游戏按钮绑 `ExitGameButton`，返回 RPG。
+- `MiniGameUIRoot/StartScreen/HomePanel`：放“开始游戏”和“退出游戏”。开始游戏按钮只绑定 `EnterGameButton`，退出游戏按钮只绑定 `ExitGameButton`。
+- `MiniGameUIRoot/StartScreen/NamingPanel`：放昵称输入框、确认按钮和返回按钮。确认按钮绑定 `ConfirmNameButton`，返回按钮绑定 `NamingBackButton`。
+- `MiniGameUIRoot/StartScreen/PreparePanel`：放创建房间、加入房间、观战加入和返回按钮。创建按钮绑定 `CreateRoomButton`，加入按钮绑定 `JoinRoomButton`，观战按钮绑定 `JoinAsViewerButton`，返回按钮绑定 `PrepareBackButton`。
+- `MiniGameUIRoot/StartScreen/RoomInputPanel`：放房间号输入框、进入按钮和返回按钮。进入按钮绑定 `RoomInputEnterButton`，返回按钮绑定 `RoomInputBackButton`。
+- `MiniGameUIRoot/StartScreen/RoomPanel`：放房间号、当前玩家数量、玩家昵称列表、观战者昵称列表、聊天框、房主开始游戏、普通玩家准备、房间返回和退出游戏。房间返回按钮只绑定 `RoomBackButton`，只离开房间回预备页；退出游戏按钮继续绑定 `ExitGameButton`，返回 RPG。
+- 可选调试按钮：`ConnectButton` 只在需要单独测试连接状态时绑定。正常创建/加入房间会自动连接，不需要给正式 UI 摆连接按钮。
 - 房间大厅观战者显示：若 UI 只有一个名单文本，绑定 `NicknameListText` 会同时显示玩家和观战者；若 UI 分开显示，则 `PlayersText` 绑定玩家列表，`ViewersText` 绑定观战者列表。
 - `MiniGameUIRoot/Bridge`：挂 `MiniGameUIViewBridge`，绑定 NiumaMiniGameController 和 StartScreen/GameScreen Receiver。
 - 游戏中场景 `MiniGameUIRoot/GameplayScreen`：挂 `MiniGameGameplayScreenUI`。
@@ -79,7 +80,12 @@ MiniGame 不直接操作 RPG 玩家控制和存档。场景切换交给 NiumaSce
 | `Scene Controller` | 拖核心场景 `NiumaSceneController` | 退出/切玩法场景时不建议 | 退出游戏、进入玩法场景会失败 |
 | `Home / Naming / Prepare / RoomInput / Room Panel` | 拖对应 UI 根节点 | 按流程决定 | 留空会走兼容流程或不控制该页显示 |
 | `Exit Game Button` | 拖退出 MiniGame 回 RPG 的按钮 | 可以 | 需要手动绑定事件 |
-| `Back Buttons` | 拖返回上一个 MiniGame 页面按钮 | 可以 | 页面返回需要手动处理 |
+| `EnterGameButton` | 拖入口页“开始游戏”按钮 | 不建议 | 玩家无法从入口页进入取名/预备页 |
+| `ConfirmNameButton / NamingBackButton` | 拖取名页确认和返回按钮 | 取名页存在时不建议留空 | 取名页无法确认或返回 |
+| `CreateRoomButton / JoinRoomButton / JoinAsViewerButton / PrepareBackButton` | 拖预备页创建、加入、观战、返回按钮 | 预备页存在时不建议留空 | 对应功能无法点击 |
+| `RoomInputEnterButton / RoomInputBackButton` | 拖房间号输入页进入和返回按钮 | 房间输入页存在时不建议留空 | 无法确认房间号或返回 |
+| `RoomBackButton` | 拖房间大厅“返回预备页”按钮 | 可以 | 不绑定则玩家不能从房间页返回预备页 |
+| `ConnectButton` | 可选调试连接按钮 | 可以 | 正式流程不需要，创建/加入会自动连接 |
 | `Gameplay Scene Name` | 填游戏中场景名 | 分场景玩法不可以 | 房间进入 Playing 后不会自动切玩法场景 |
 | `Fallback Return Scene Name` | 测试时填 RPG 场景名 | 可以 | 没有 ReturnContext 时无法退出回 RPG |
 
