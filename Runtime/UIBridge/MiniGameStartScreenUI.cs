@@ -141,6 +141,9 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("取消准备按钮。普通玩家点击后取消准备；房主不使用该按钮。")]
         [SerializeField] private Button unreadyButton;
 
+        [Tooltip("放在 RoomPanel 的身份切换按钮。玩家点击后切为观战者；观战者点击后切为玩家。只在房间大厅 Lobby 状态可用。")]
+        [SerializeField] private Button switchRoleButton;
+
         [Tooltip("房间页返回按钮。点击后离开当前房间并回到预备页，不返回 RPG。新版 UI 只绑定这个，不再绑定 LeaveRoomButton。")]
         [SerializeField] private Button roomBackButton;
 
@@ -266,6 +269,7 @@ namespace NiumaMiniGame.UIBridge
         private float _toastHideTime = -1f;
         private bool _gameplaySceneLoadRequested;
         private long _lastAppliedToastTimeMs;
+        private bool _warnedMissingRoomPanel;
 
         private void Awake()
         {
@@ -306,7 +310,7 @@ namespace NiumaMiniGame.UIBridge
         {
             var panel = update.PanelData;
             _lastPanel = panel;
-            if (panel != null && !string.IsNullOrWhiteSpace(panel.RoomId))
+            if (HasRoomSnapshot(panel))
             {
                 _currentPage = MiniGameStartPage.Room;
             }
@@ -404,6 +408,22 @@ namespace NiumaMiniGame.UIBridge
             {
                 miniGameController.SetReady(false);
             }
+        }
+
+        public void ClickSwitchRole()
+        {
+            if (!ResolveController(true))
+            {
+                return;
+            }
+
+            if (_lastPanel?.Room == null || _lastPanel.Room.State != MiniGameRoomState.Lobby)
+            {
+                ShowRoomTip("只有房间大厅状态可以切换玩家/观战身份。", false);
+                return;
+            }
+
+            miniGameController.SwitchRole(!_lastPanel.IsLocalViewer);
         }
 
         public void ClickLeaveRoom()
@@ -564,25 +584,36 @@ namespace NiumaMiniGame.UIBridge
 
         private void RefreshPanels(MiniGamePanelViewData panel)
         {
-            var hasRoom = panel != null && !string.IsNullOrWhiteSpace(panel.RoomId);
+            var hasRoom = HasRoomSnapshot(panel);
+            var showRoomFallback = hasRoom && roomPanel == null;
             if (hasRoom)
             {
                 _currentPage = MiniGameStartPage.Room;
+            }
+            else if (_currentPage == MiniGameStartPage.Room)
+            {
+                _currentPage = MiniGameStartPage.Prepare;
+            }
+
+            if (showRoomFallback && !_warnedMissingRoomPanel)
+            {
+                _warnedMissingRoomPanel = true;
+                Warn("已进入房间，但 RoomPanel 未绑定。请把房间大厅根节点拖到 MiniGameStartScreenUI 的 RoomPanel 字段，否则无法显示房间页面。");
             }
 
             SetActive(startRoot, true);
             if (!UsesPagedFlow())
             {
-                SetActive(entryPanel, !hasRoom);
+                SetActive(entryPanel, !hasRoom || showRoomFallback);
                 SetActive(roomPanel, hasRoom);
             }
             else
             {
                 SetActive(homePanel, !hasRoom && _currentPage == MiniGameStartPage.Home);
                 SetActive(namingPanel, !hasRoom && _currentPage == MiniGameStartPage.Naming);
-                SetActive(preparePanel, !hasRoom && _currentPage == MiniGameStartPage.Prepare);
+                SetActive(preparePanel, (!hasRoom && _currentPage == MiniGameStartPage.Prepare) || (showRoomFallback && preparePanel != null));
                 SetActive(roomInputPanel, !hasRoom && _currentPage == MiniGameStartPage.RoomInput);
-                SetActive(entryPanel, !hasRoom && preparePanel == null && _currentPage == MiniGameStartPage.Prepare);
+                SetActive(entryPanel, (!hasRoom && preparePanel == null && _currentPage == MiniGameStartPage.Prepare) || (showRoomFallback && preparePanel == null));
                 SetActive(roomPanel, hasRoom);
             }
 
@@ -618,14 +649,15 @@ namespace NiumaMiniGame.UIBridge
 
             if (panel.Room == null)
             {
-                SetText(roomText, "未进入房间");
-                SetText(roomIdText, string.Empty);
-                SetText(playerCountText, "当前人数：0");
+                var waitingForRoomSnapshot = IsWaitingForRoomSnapshot(panel);
+                SetText(roomText, waitingForRoomSnapshot ? "房间已创建，正在同步房间大厅数据..." : "未进入房间");
+                SetText(roomIdText, waitingForRoomSnapshot ? $"房间号：{panel.RoomId}" : string.Empty);
+                SetText(playerCountText, waitingForRoomSnapshot ? "当前人数：同步中" : "当前人数：0");
                 SetText(nicknameListText, string.Empty);
                 SetText(chatMessagesText, BuildChatList(panel.Chats));
                 SetText(playersText, string.Empty);
                 SetText(viewersText, string.Empty);
-                SetText(hintText, BuildPageHint());
+                SetText(hintText, waitingForRoomSnapshot ? "服务器已分配房间号，正在等待 RoomSnapshot。若长时间停留，请检查后端是否广播 RoomSnapshot。" : BuildPageHint());
             }
             else
             {
@@ -645,28 +677,30 @@ namespace NiumaMiniGame.UIBridge
         private void RefreshButtonStates(MiniGamePanelViewData panel)
         {
             var connected = panel != null && panel.IsConnected;
-            var hasRoom = panel != null && !string.IsNullOrWhiteSpace(panel.RoomId);
+            var hasRoom = HasRoomSnapshot(panel);
+            var waitingForRoomSnapshot = IsWaitingForRoomSnapshot(panel);
             var inLobby = panel?.Room != null && panel.Room.State == MiniGameRoomState.Lobby;
             var isViewer = panel != null && panel.IsLocalViewer;
             var isHost = IsLocalHost(panel);
 
             SetInteractable(connectButton, !connected);
-            SetInteractable(createRoomButton, !hasRoom);
-            SetInteractable(joinRoomButton, !hasRoom);
-            SetInteractable(joinAsViewerButton, !hasRoom);
-            SetInteractable(roomInputEnterButton, !hasRoom);
+            SetInteractable(createRoomButton, !hasRoom && !waitingForRoomSnapshot);
+            SetInteractable(joinRoomButton, !hasRoom && !waitingForRoomSnapshot);
+            SetInteractable(joinAsViewerButton, !hasRoom && !waitingForRoomSnapshot);
+            SetInteractable(roomInputEnterButton, !hasRoom && !waitingForRoomSnapshot);
             SetInteractable(readyButton, connected && hasRoom && inLobby && !isViewer && !isHost);
             SetInteractable(unreadyButton, connected && hasRoom && inLobby && !isViewer && !isHost);
+            SetInteractable(switchRoleButton, connected && hasRoom && inLobby);
             SetInteractable(leaveRoomButton, connected && hasRoom);
             SetInteractable(roomBackButton, connected && hasRoom);
             SetInteractable(exitGameButton, true);
             SetInteractable(returnSceneButton, true);
             SetInteractable(sendChatButton, connected && hasRoom);
-            SetInteractable(enterGameButton, !hasRoom);
-            SetInteractable(confirmNameButton, !hasRoom);
-            SetInteractable(namingBackButton, !hasRoom);
-            SetInteractable(prepareBackButton, !hasRoom);
-            SetInteractable(roomInputBackButton, !hasRoom);
+            SetInteractable(enterGameButton, !hasRoom && !waitingForRoomSnapshot);
+            SetInteractable(confirmNameButton, !hasRoom && !waitingForRoomSnapshot);
+            SetInteractable(namingBackButton, !hasRoom && !waitingForRoomSnapshot);
+            SetInteractable(prepareBackButton, !hasRoom && !waitingForRoomSnapshot);
+            SetInteractable(roomInputBackButton, !hasRoom && !waitingForRoomSnapshot);
             SetInteractable(hostStartGameButton, connected && hasRoom && inLobby && isHost && !isViewer);
             SetInteractable(modeSelectButton, !hasRoom || (hasRoom && isHost && inLobby));
         }
@@ -934,6 +968,16 @@ namespace NiumaMiniGame.UIBridge
             return toastText != null ? toastText : hintText;
         }
 
+        private static bool HasRoomSnapshot(MiniGamePanelViewData panel)
+        {
+            return panel?.Room != null && !string.IsNullOrWhiteSpace(panel.Room.RoomId);
+        }
+
+        private static bool IsWaitingForRoomSnapshot(MiniGamePanelViewData panel)
+        {
+            return panel?.Room == null && !string.IsNullOrWhiteSpace(panel?.RoomId);
+        }
+
         private bool UsesPagedFlow()
         {
             return homePanel != null
@@ -1107,6 +1151,7 @@ namespace NiumaMiniGame.UIBridge
             BindButton(joinAsViewerButton, ClickJoinAsViewer);
             BindButton(readyButton, ClickReady);
             BindButton(unreadyButton, ClickUnready);
+            BindButton(switchRoleButton, ClickSwitchRole);
             BindButton(leaveRoomButton, ClickLeaveRoom);
             BindButton(roomBackButton, ClickLeaveRoom);
             BindButton(exitGameButton, ClickReturnToPreviousScene);
@@ -1130,6 +1175,7 @@ namespace NiumaMiniGame.UIBridge
             UnbindButton(joinAsViewerButton, ClickJoinAsViewer);
             UnbindButton(readyButton, ClickReady);
             UnbindButton(unreadyButton, ClickUnready);
+            UnbindButton(switchRoleButton, ClickSwitchRole);
             UnbindButton(leaveRoomButton, ClickLeaveRoom);
             UnbindButton(roomBackButton, ClickLeaveRoom);
             UnbindButton(exitGameButton, ClickReturnToPreviousScene);

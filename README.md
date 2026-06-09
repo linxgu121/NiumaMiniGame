@@ -36,7 +36,7 @@ NiumaMiniGame 是联机小游戏前端模块，当前核心玩法为你画我猜
 - `MiniGameUIRoot/StartScreen/NamingPanel`：放昵称输入框、确认按钮和返回按钮。确认按钮绑定 `ConfirmNameButton`，返回按钮绑定 `NamingBackButton`。
 - `MiniGameUIRoot/StartScreen/PreparePanel`：放创建房间、加入房间、观战加入和返回按钮。创建按钮绑定 `CreateRoomButton`，加入按钮绑定 `JoinRoomButton`，观战按钮绑定 `JoinAsViewerButton`，返回按钮绑定 `PrepareBackButton`。
 - `MiniGameUIRoot/StartScreen/RoomInputPanel`：放房间号输入框、进入按钮和返回按钮。进入按钮绑定 `RoomInputEnterButton`，返回按钮绑定 `RoomInputBackButton`。
-- `MiniGameUIRoot/StartScreen/RoomPanel`：放房间号、当前玩家数量、玩家昵称列表、观战者昵称列表、聊天框、房主开始游戏、普通玩家准备、房间返回和退出游戏。房间返回按钮只绑定 `RoomBackButton`，只离开房间回预备页；退出游戏按钮继续绑定 `ExitGameButton`，返回 RPG。
+- `MiniGameUIRoot/StartScreen/RoomPanel`：放房间号、当前玩家数量、玩家昵称列表、观战者昵称列表、聊天框、模式切换、身份切换、房主开始游戏、普通玩家准备、房间返回和退出游戏。房间返回按钮只绑定 `RoomBackButton`，只离开房间回预备页；退出游戏按钮继续绑定 `ExitGameButton`，返回 RPG。
 - 可选调试按钮：`ConnectButton` 只在需要单独测试连接状态时绑定。正常创建/加入房间会自动连接，不需要给正式 UI 摆连接按钮。
 - 房间大厅名单显示：`PlayersText` 会显示玩家昵称、本机标记、房主、准备/未准备、状态、离线；`ViewersText` 会显示观战者昵称、本机标记、观战者、状态、离线。若 UI 只有一个名单文本，绑定 `NicknameListText` 会合并显示玩家和观战者。
 - `MiniGameUIRoot/Bridge`：挂 `MiniGameUIViewBridge`，绑定 NiumaMiniGameController 和 StartScreen/GameScreen Receiver。
@@ -82,6 +82,8 @@ Canvas
         │   ├── HostControls -> HostRoomControls
         │   ├── GuestControls -> GuestRoomControls
         │   ├── ViewerControls -> ViewerRoomControls
+        │   ├── ModeSelectButton -> ModeSelectButton（房主切游戏模式）
+        │   ├── SwitchRoleButton -> SwitchRoleButton（玩家/观战身份互切）
         │   ├── RoomBackButton -> RoomBackButton
         │   └── ExitButton -> ExitGameButton
         ├── HintText -> HintText（顶层提示，可放页面底部）
@@ -132,6 +134,8 @@ MiniGame 不直接操作 RPG 玩家控制和存档。场景切换交给 NiumaSce
 | `CreateRoomButton / JoinRoomButton / JoinAsViewerButton / PrepareBackButton` | 拖预备页创建、加入、观战、返回按钮 | 预备页存在时不建议留空 | 对应功能无法点击 |
 | `RoomInputEnterButton / RoomInputBackButton` | 拖房间号输入页进入和返回按钮 | 房间输入页存在时不建议留空 | 无法确认房间号或返回 |
 | `RoomBackButton` | 拖房间大厅“返回预备页”按钮 | 可以 | 不绑定则玩家不能从房间页返回预备页 |
+| `ModeSelectButton` | 拖房间大厅的“切换模式”按钮，建议只放在房主控件区域 | 可以 | 不绑定则房主不能在大厅切换模式 |
+| `SwitchRoleButton` | 拖房间大厅的“切换玩家/观战身份”按钮，建议放在大厅公共操作区 | 可以 | 不绑定则玩家加入后不能从 UI 切换身份 |
 | `ConnectButton` | 可选调试连接按钮 | 可以 | 正式流程不需要，创建/加入会自动连接 |
 | `ConnectionText / RoomText / HintText / ErrorText` | 拖对应显示位置的 `TMP_Text` 组件 | 可以 | 留空则不显示对应运行时文本；这些字段不是让策划手写内容 |
 | `PlayersText / ViewersText / NicknameListText` | 拖大厅名单显示用的 `TMP_Text` 组件 | 至少按 UI 方案绑定一种 | `PlayersText` 和 `ViewersText` 分开显示两组；`NicknameListText` 合并显示两组 |
@@ -143,6 +147,8 @@ MiniGame 不直接操作 RPG 玩家控制和存档。场景切换交给 NiumaSce
 | `Fallback Return Scene Name` | 测试时填 RPG 场景名 | 可以 | 没有 ReturnContext 时无法退出回 RPG |
 
 `ModeDisplayImage` 只是 UI 上的图片显示容器，不是固定模式图。每个模式自己的展示图片填在 `ModeOptions` 的 `DisplaySprite` 中，例如 `draw_telephone` 配你画我猜图片，后续新增模式再给对应元素配另一张图片。
+
+`ModeSelectButton` 和 `SwitchRoleButton` 是两个不同功能：`ModeSelectButton` 切换小游戏模式，只允许房主在 Lobby 大厅使用；`SwitchRoleButton` 切换自己是玩家还是观战者，玩家点后变观战者，观战者点后变玩家，也只在 Lobby 大厅可用。游戏开始后身份不允许切换，避免破坏当前回合链路。
 
 ### MiniGameDialogueActionHandler
 建议挂载位置：RPG 中 MiniGame NPC 所在场景，或 Gal 行为桥接根物体。

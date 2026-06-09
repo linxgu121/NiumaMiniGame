@@ -209,6 +209,15 @@ namespace NiumaMiniGame.Controller
             return SendReliable(new ChangeModeRequest { modeId = modeId.Trim() });
         }
 
+        /// <summary>
+        /// 在房间大厅中切换本机身份。
+        /// asViewer=true 表示切到观战者，asViewer=false 表示切到参赛玩家。
+        /// </summary>
+        public bool SwitchRole(bool asViewer)
+        {
+            return SendReliable(new SwitchRoleRequest { viewer = asViewer });
+        }
+
         public bool BindUdp()
         {
             return SendReliable(new UdpBindRequest

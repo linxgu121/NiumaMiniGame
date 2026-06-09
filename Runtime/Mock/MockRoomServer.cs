@@ -18,6 +18,8 @@ namespace NiumaMiniGame.Mock
     public sealed class MockRoomServer
     {
         private const int MaxRoomIdRetryCount = 10;
+        private const int MaxPlayers = 10;
+        private const int MaxViewers = 20;
         private const int DrawTelephoneMinPlayers = 2;
         private const float MockDrawStageSeconds = 90f;
         private const float MockGuessStageSeconds = 45f;
@@ -113,6 +115,9 @@ namespace NiumaMiniGame.Mock
                     break;
                 case ChangeModeRequest request:
                     HandleChangeMode(session, request);
+                    break;
+                case SwitchRoleRequest request:
+                    HandleSwitchRole(session, request);
                     break;
                 case Heartbeat heartbeat:
                     HandleHeartbeat(session, heartbeat);
@@ -219,7 +224,7 @@ namespace NiumaMiniGame.Mock
                 return;
             }
 
-            if (!request.viewer && room.Players.Count >= 10 && !room.Players.ContainsKey(session.PlayerId))
+            if (!request.viewer && room.Players.Count >= MaxPlayers && !room.Players.ContainsKey(session.PlayerId))
             {
                 session.Client.EnqueueReliable(MessageType.JoinRoomResult, new JoinRoomResult
                 {
@@ -242,6 +247,16 @@ namespace NiumaMiniGame.Mock
 
             if (request.viewer)
             {
+                if (room.Viewers.Count >= MaxViewers && !room.Viewers.ContainsKey(session.PlayerId))
+                {
+                    session.Client.EnqueueReliable(MessageType.JoinRoomResult, new JoinRoomResult
+                    {
+                        succeeded = false,
+                        errorCode = nameof(MiniGameErrorCode.RoomFull)
+                    }, room.RoomId);
+                    return;
+                }
+
                 AddOrReconnectViewer(room, session, request.displayName);
             }
             else
@@ -426,6 +441,129 @@ namespace NiumaMiniGame.Mock
                 serverTimeMs = MockMiniGameTime.NowMs
             });
             BroadcastRoomSnapshot(room);
+        }
+
+        private void HandleSwitchRole(MockServerSession session, SwitchRoleRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(session.RoomId) || !_rooms.TryGetValue(session.RoomId, out var room))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.RoomNotFound));
+                return;
+            }
+
+            if (!string.Equals(room.State, nameof(MiniGameRoomState.Lobby), StringComparison.Ordinal))
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidState), room.RoomId);
+                return;
+            }
+
+            if (request != null && request.viewer)
+            {
+                SwitchPlayerToViewer(session, room);
+            }
+            else
+            {
+                SwitchViewerToPlayer(session, room);
+            }
+        }
+
+        private void SwitchPlayerToViewer(MockServerSession session, MockRoomRuntime room)
+        {
+            if (!room.Players.TryGetValue(session.PlayerId, out var player))
+            {
+                if (room.Viewers.ContainsKey(session.PlayerId))
+                {
+                    return;
+                }
+
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidPlayer), room.RoomId);
+                return;
+            }
+
+            if (room.Players.Count <= 1)
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidState), room.RoomId);
+                return;
+            }
+
+            if (room.Viewers.Count >= MaxViewers)
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.RoomFull), room.RoomId);
+                return;
+            }
+
+            room.Players.Remove(session.PlayerId);
+            player.Ready = false;
+            player.IsViewer = true;
+            room.Viewers[player.PlayerId] = player;
+            session.IsViewer = true;
+            TransferHostIfNeeded(room);
+            ResetAllReady(room);
+            BroadcastRoleChanged(room, player, true);
+            BroadcastRoomSnapshot(room);
+        }
+
+        private void SwitchViewerToPlayer(MockServerSession session, MockRoomRuntime room)
+        {
+            if (!room.Viewers.TryGetValue(session.PlayerId, out var viewer))
+            {
+                if (room.Players.ContainsKey(session.PlayerId))
+                {
+                    return;
+                }
+
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.InvalidPlayer), room.RoomId);
+                return;
+            }
+
+            if (room.Players.Count >= MaxPlayers)
+            {
+                session.Client.EnqueueReliable(MessageType.ErrorMessage, BuildError(MiniGameErrorCode.RoomFull), room.RoomId);
+                return;
+            }
+
+            room.Viewers.Remove(session.PlayerId);
+            viewer.Ready = false;
+            viewer.IsViewer = false;
+            room.Players[viewer.PlayerId] = viewer;
+            session.IsViewer = false;
+            if (string.IsNullOrWhiteSpace(room.HostPlayerId))
+            {
+                room.HostPlayerId = viewer.PlayerId;
+            }
+
+            ResetAllReady(room);
+            BroadcastRoleChanged(room, viewer, false);
+            BroadcastRoomSnapshot(room);
+        }
+
+        private void ResetAllReady(MockRoomRuntime room)
+        {
+            if (room == null)
+            {
+                return;
+            }
+
+            foreach (var player in room.Players.Values)
+            {
+                player.Ready = false;
+            }
+        }
+
+        private void BroadcastRoleChanged(MockRoomRuntime room, MockRoomPlayerRuntime player, bool viewer)
+        {
+            BroadcastReliableToRoom(room.RoomId, MessageType.RoomToastMessage, new RoomToastMessage
+            {
+                messageKey = viewer ? "room_role_switched_to_viewer" : "room_role_switched_to_player",
+                text = $"{SafeDisplayName(player.DisplayName, player.PlayerId)} 已切换为{(viewer ? "观战者" : "玩家")}。",
+                sourcePlayerId = player.PlayerId,
+                serverTimeMs = MockMiniGameTime.NowMs
+            });
+        }
+
+        private static string SafeDisplayName(string displayName, string playerId)
+        {
+            return string.IsNullOrWhiteSpace(displayName) ? playerId : displayName;
         }
 
         private void HandleHeartbeat(MockServerSession session, Heartbeat heartbeat)

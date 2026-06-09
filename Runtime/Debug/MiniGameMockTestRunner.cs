@@ -67,6 +67,16 @@ namespace NiumaMiniGame.Debugging
             Expect(DrainUntil<JoinRoomResult>(viewer, MessageType.JoinRoomResult, out var viewerJoinResult), "观战者收到加房结果", ref passed, ref failed);
             Expect(viewerJoinResult != null && viewerJoinResult.succeeded, "观战者加房成功", ref passed, ref failed);
 
+            viewer.SendReliable(new SwitchRoleRequest { viewer = false });
+            Expect(DrainLatest<RoomSnapshot>(host, MessageType.RoomSnapshot, out var switchToPlayerSnapshot), "房主收到观战者切玩家快照", ref passed, ref failed);
+            Expect(switchToPlayerSnapshot != null && switchToPlayerSnapshot.players != null && switchToPlayerSnapshot.players.Length == 3, "观战者切换为玩家后玩家数为 3", ref passed, ref failed);
+            Expect(switchToPlayerSnapshot != null && switchToPlayerSnapshot.viewers != null && switchToPlayerSnapshot.viewers.Length == 0, "观战者切换为玩家后观战者数为 0", ref passed, ref failed);
+
+            viewer.SendReliable(new SwitchRoleRequest { viewer = true });
+            Expect(DrainLatest<RoomSnapshot>(guest, MessageType.RoomSnapshot, out var switchToViewerSnapshot), "成员收到玩家切观战者快照", ref passed, ref failed);
+            Expect(switchToViewerSnapshot != null && switchToViewerSnapshot.players != null && switchToViewerSnapshot.players.Length == 2, "玩家切换为观战者后玩家数为 2", ref passed, ref failed);
+            Expect(switchToViewerSnapshot != null && switchToViewerSnapshot.viewers != null && switchToViewerSnapshot.viewers.Length == 1, "玩家切换为观战者后观战者数为 1", ref passed, ref failed);
+
             host.SendReliable(new PlayerReadyRequest { ready = true });
             guest.SendReliable(new PlayerReadyRequest { ready = true });
 

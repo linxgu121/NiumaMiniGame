@@ -87,6 +87,16 @@ namespace NiumaMiniGame.Room
         public string modeId;
     }
 
+    /// <summary>
+    /// 房间内身份切换请求。
+    /// viewer=true 表示切到观战者；viewer=false 表示切到参赛玩家。
+    /// </summary>
+    [Serializable]
+    public sealed class SwitchRoleRequest : IRealtimeMessage
+    {
+        public bool viewer;
+    }
+
     [Serializable]
     public sealed class RoomToastMessage : IRealtimeMessage
     {
