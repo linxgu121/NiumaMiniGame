@@ -38,13 +38,60 @@ NiumaMiniGame 是联机小游戏前端模块，当前核心玩法为你画我猜
 - `MiniGameUIRoot/StartScreen/RoomInputPanel`：放房间号输入框、进入按钮和返回按钮。进入按钮绑定 `RoomInputEnterButton`，返回按钮绑定 `RoomInputBackButton`。
 - `MiniGameUIRoot/StartScreen/RoomPanel`：放房间号、当前玩家数量、玩家昵称列表、观战者昵称列表、聊天框、房主开始游戏、普通玩家准备、房间返回和退出游戏。房间返回按钮只绑定 `RoomBackButton`，只离开房间回预备页；退出游戏按钮继续绑定 `ExitGameButton`，返回 RPG。
 - 可选调试按钮：`ConnectButton` 只在需要单独测试连接状态时绑定。正常创建/加入房间会自动连接，不需要给正式 UI 摆连接按钮。
-- 房间大厅观战者显示：若 UI 只有一个名单文本，绑定 `NicknameListText` 会同时显示玩家和观战者；若 UI 分开显示，则 `PlayersText` 绑定玩家列表，`ViewersText` 绑定观战者列表。
+- 房间大厅名单显示：`PlayersText` 会显示玩家昵称、本机标记、房主、准备/未准备、状态、离线；`ViewersText` 会显示观战者昵称、本机标记、观战者、状态、离线。若 UI 只有一个名单文本，绑定 `NicknameListText` 会合并显示玩家和观战者。
 - `MiniGameUIRoot/Bridge`：挂 `MiniGameUIViewBridge`，绑定 NiumaMiniGameController 和 StartScreen/GameScreen Receiver。
 - 游戏中场景 `MiniGameUIRoot/GameplayScreen`：挂 `MiniGameGameplayScreenUI`。
 - `MiniGameUIRoot/DrawingCanvas`：挂 `MiniGameDrawingCanvas`，绑定画布 RawImage/Texture、笔刷工具和输入事件。
 - 礼物按钮物体挂 `MiniGameGiftDragButton`，拖拽目标限制在画布或答案模块。
 - 游戏结束返回房间由 UI/Controller 处理；退出整个小游戏时通过 `MiniGameGameplaySceneReturnBridge` 或 NiumaScene.ReturnToPreviousScene 回 RPG。
 - 开发测试场景可挂 `MiniGameMockTestRunner` 和 `MiniGameUIDebugReceiver`。
+
+### MiniGameStartScreenUI 摆放速查
+建议 UI 层级按下面搭，名字不要求完全一致，但页面职责建议保持一致：
+
+```text
+Canvas
+└── MiniGameUIRoot
+    └── StartScreen（挂 MiniGameStartScreenUI）
+        ├── HomePanel（入口页）
+        │   ├── StartButton -> EnterGameButton
+        │   └── ExitButton -> ExitGameButton
+        ├── NamingPanel（取名页）
+        │   ├── NameInput -> DisplayNameInput
+        │   ├── ConfirmButton -> ConfirmNameButton
+        │   └── BackButton -> NamingBackButton
+        ├── PreparePanel（预备页）
+        │   ├── CreateRoomButton -> CreateRoomButton
+        │   ├── JoinRoomButton -> JoinRoomButton
+        │   ├── WatchRoomButton -> JoinAsViewerButton
+        │   └── BackButton -> PrepareBackButton
+        ├── RoomInputPanel（房间号输入页）
+        │   ├── RoomIdInput -> RoomIdInput
+        │   ├── EnterButton -> RoomInputEnterButton
+        │   └── BackButton -> RoomInputBackButton
+        ├── RoomPanel（房间大厅页）
+        │   ├── RoomIdText -> RoomIdText
+        │   ├── PlayerCountText -> PlayerCountText
+        │   ├── ModeNameText -> ModeDisplayText
+        │   ├── ModeImage -> ModeDisplayImage
+        │   ├── PlayersText -> PlayersText
+        │   ├── ViewersText -> ViewersText
+        │   ├── ChatMessagesText -> ChatMessagesText
+        │   ├── ChatInput -> ChatInput
+        │   ├── SendChatButton -> SendChatButton
+        │   ├── HostControls -> HostRoomControls
+        │   ├── GuestControls -> GuestRoomControls
+        │   ├── ViewerControls -> ViewerRoomControls
+        │   ├── RoomBackButton -> RoomBackButton
+        │   └── ExitButton -> ExitGameButton
+        ├── HintText -> HintText（顶层提示，可放页面底部）
+        ├── ErrorText -> ErrorText（顶层错误提示）
+        └── ToastText -> ToastText（顶层短提示）
+```
+
+`HomePanel / NamingPanel / PreparePanel / RoomInputPanel / RoomPanel` 是页面根节点，脚本会自动控制显示隐藏。按钮和文本字段不是用来填写文字内容，而是把场景里已经摆好的 UI 组件拖到脚本上，让运行时自动刷新。
+
+模式图片不要只在 `ModeDisplayImage` 上放一张固定图。正确做法是：`ModeDisplayImage` 拖 RoomPanel 里的 Image 组件；每个 `ModeOptions` 元素的 `DisplaySprite` 分别配置该模式自己的展示图。
 
 ## 协作边界
 MiniGame 不直接操作 RPG 玩家控制和存档。场景切换交给 NiumaScene，入口选择交给 NiumaGal，联机权威状态由后端房间状态机托管。
@@ -86,8 +133,16 @@ MiniGame 不直接操作 RPG 玩家控制和存档。场景切换交给 NiumaSce
 | `RoomInputEnterButton / RoomInputBackButton` | 拖房间号输入页进入和返回按钮 | 房间输入页存在时不建议留空 | 无法确认房间号或返回 |
 | `RoomBackButton` | 拖房间大厅“返回预备页”按钮 | 可以 | 不绑定则玩家不能从房间页返回预备页 |
 | `ConnectButton` | 可选调试连接按钮 | 可以 | 正式流程不需要，创建/加入会自动连接 |
+| `ConnectionText / RoomText / HintText / ErrorText` | 拖对应显示位置的 `TMP_Text` 组件 | 可以 | 留空则不显示对应运行时文本；这些字段不是让策划手写内容 |
+| `PlayersText / ViewersText / NicknameListText` | 拖大厅名单显示用的 `TMP_Text` 组件 | 至少按 UI 方案绑定一种 | `PlayersText` 和 `ViewersText` 分开显示两组；`NicknameListText` 合并显示两组 |
+| `RoomIdText / PlayerCountText / ModeDisplayText` | 拖房间号、人数、模式名显示用的 `TMP_Text` 组件 | 可以 | 留空则该块 UI 不自动刷新 |
+| `ChatMessagesText / ToastText` | 拖聊天记录和短提示显示用的 `TMP_Text` 组件 | 可以 | 留空则聊天记录或短提示不显示，`ToastText` 为空会复用 `HintText` |
+| `ModeDisplayImage` | 拖场景里的 `Image` 组件 | 可以 | 留空则只显示模式文字，不显示模式图 |
+| `ModeOptions` | 每个元素配置一个模式：`ModeId`、`DisplayName`、`DisplaySprite`、人数规则 | 不建议 | 留空时只能使用 `DefaultModeId`，模式按钮没有可切换的图文配置 |
 | `Gameplay Scene Name` | 填游戏中场景名 | 分场景玩法不可以 | 房间进入 Playing 后不会自动切玩法场景 |
 | `Fallback Return Scene Name` | 测试时填 RPG 场景名 | 可以 | 没有 ReturnContext 时无法退出回 RPG |
+
+`ModeDisplayImage` 只是 UI 上的图片显示容器，不是固定模式图。每个模式自己的展示图片填在 `ModeOptions` 的 `DisplaySprite` 中，例如 `draw_telephone` 配你画我猜图片，后续新增模式再给对应元素配另一张图片。
 
 ### MiniGameDialogueActionHandler
 建议挂载位置：RPG 中 MiniGame NPC 所在场景，或 Gal 行为桥接根物体。

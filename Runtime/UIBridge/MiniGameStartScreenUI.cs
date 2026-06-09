@@ -23,7 +23,7 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("模式显示名称，用于开始场景和房间大厅 UI。")]
         public string DisplayName = "你画我猜";
 
-        [Tooltip("模式展示图。为空时只显示文字。")]
+        [Tooltip("该模式自己的展示图。每个 ModeOption 单独配置一张；ModeDisplayImage 只是场景里的 Image 显示容器。为空时只显示文字。")]
         public Sprite DisplaySprite;
 
         [Tooltip("最少玩家数量。你画我猜第一版至少需要 2 名玩家。")]
@@ -161,51 +161,51 @@ namespace NiumaMiniGame.UIBridge
         [SerializeField] private TMP_InputField modeIdInput;
 
         [Header("文本显示")]
-        [Tooltip("连接状态文本。")]
+        [Tooltip("建议放在 RoomPanel 或调试区的连接状态文本。拖 TMP_Text 组件即可，运行时自动写入“已连接/未连接”，策划不需要在这里填写文字内容。")]
         [SerializeField] private TMP_Text connectionText;
 
-        [Tooltip("房间状态文本。")]
+        [Tooltip("建议放在 RoomPanel 顶部信息区的房间摘要文本。拖 TMP_Text 组件，运行时自动写入房间号、模式、房主和本机身份。")]
         [SerializeField] private TMP_Text roomText;
 
-        [Tooltip("玩家列表文本。")]
+        [Tooltip("放在 RoomPanel 的玩家列表区域。拖 TMP_Text 组件，运行时自动显示玩家昵称、房主、准备/未准备、状态、离线。")]
         [SerializeField] private TMP_Text playersText;
 
-        [Tooltip("观战者列表文本。建议在房间大厅单独放一块文本显示观战者昵称。")]
+        [Tooltip("放在 RoomPanel 的观战者列表区域。拖 TMP_Text 组件，运行时自动显示观战者昵称、观战状态、离线；如果没有单独区域，可只用 NicknameListText。")]
         [SerializeField] private TMP_Text viewersText;
 
-        [Tooltip("提示文本，用于显示当前可执行操作。")]
+        [Tooltip("建议放在 StartScreen 顶层或当前页面底部的流程提示文本。拖 TMP_Text 组件，运行时自动写入当前可执行操作。")]
         [SerializeField] private TMP_Text hintText;
 
-        [Tooltip("错误文本，用于显示服务器或 Mock 返回的错误。")]
+        [Tooltip("建议放在 StartScreen 顶层错误提示区域。拖 TMP_Text 组件，运行时自动显示服务器或 Mock 返回的错误。")]
         [SerializeField] private TMP_Text errorText;
 
-        [Tooltip("模式名称显示文本。")]
+        [Tooltip("放在 RoomPanel 的模式显示区域。拖 TMP_Text 组件，运行时自动显示当前模式的 DisplayName。")]
         [SerializeField] private TMP_Text modeDisplayText;
 
-        [Tooltip("房间号显示文本。")]
+        [Tooltip("放在 RoomPanel 的房间号显示区域。拖 TMP_Text 组件，运行时自动显示系统分配或玩家加入的房间号。")]
         [SerializeField] private TMP_Text roomIdText;
 
-        [Tooltip("当前房间玩家数量显示文本。")]
+        [Tooltip("放在 RoomPanel 的人数显示区域。拖 TMP_Text 组件，运行时自动显示当前玩家数量，不包含观战者。")]
         [SerializeField] private TMP_Text playerCountText;
 
-        [Tooltip("昵称列表文本。用于显示房间内所有人：玩家列表 + 观战者列表。若想分开显示，也可以同时绑定 PlayersText 和 ViewersText。")]
+        [Tooltip("放在 RoomPanel 的合并名单区域。拖 TMP_Text 组件，运行时自动显示玩家列表 + 观战者列表；如果 UI 已分开显示，可不绑定这里，只绑定 PlayersText 和 ViewersText。")]
         [SerializeField] private TMP_Text nicknameListText;
 
-        [Tooltip("聊天记录文本。")]
+        [Tooltip("放在 RoomPanel 的聊天记录框。拖 TMP_Text 组件，运行时自动追加房间聊天内容。")]
         [SerializeField] private TMP_Text chatMessagesText;
 
-        [Tooltip("短提示文本，例如人数不足提示。为空时复用 hintText。")]
+        [Tooltip("建议放在 StartScreen 顶层短提示区域。拖 TMP_Text 组件，运行时显示人数不足等 2 秒提示；为空时复用 HintText。")]
         [SerializeField] private TMP_Text toastText;
 
         [Header("图片显示")]
-        [Tooltip("模式展示图。")]
+        [Tooltip("放在 RoomPanel 的模式展示图片区。拖 Image 组件，不是在这里填固定图片；实际图片来自当前 ModeOption.DisplaySprite。")]
         [SerializeField] private Image modeDisplayImage;
 
         [Header("默认配置")]
         [Tooltip("默认模式 ID。当前你画我猜使用 draw_telephone。")]
         [SerializeField] private string defaultModeId = "draw_telephone";
 
-        [Tooltip("可切换的模式配置。第一版建议至少配置 draw_telephone。")]
+        [Tooltip("可切换的模式列表。每个元素配置一个 ModeId、显示名、展示图和人数规则；点击模式选择按钮会切换并显示对应 DisplaySprite。")]
         [SerializeField] private MiniGameModeOption[] modeOptions;
 
         [Tooltip("本地短提示显示秒数。")]
@@ -695,24 +695,7 @@ namespace NiumaMiniGame.UIBridge
                     continue;
                 }
 
-                _builder.AppendLine();
-                _builder.Append(player.IsLocalPlayer ? "我 " : "- ");
-                _builder.Append(string.IsNullOrWhiteSpace(player.DisplayName) ? ShortId(player.PlayerId) : player.DisplayName);
-
-                if (!player.IsViewer)
-                {
-                    if (player.IsHost)
-                    {
-                        _builder.Append("  房主");
-                    }
-
-                    _builder.Append(player.IsReady ? "  已准备" : "  未准备");
-                }
-
-                if (!player.IsConnected)
-                {
-                    _builder.Append("  离线");
-                }
+                AppendMemberLine(player);
             }
 
             return _builder.ToString();
@@ -748,29 +731,67 @@ namespace NiumaMiniGame.UIBridge
                     continue;
                 }
 
-                _builder.AppendLine();
-                _builder.Append(member.IsLocalPlayer ? "我 " : "- ");
-                _builder.Append(string.IsNullOrWhiteSpace(member.DisplayName) ? ShortId(member.PlayerId) : member.DisplayName);
-
-                if (member.IsViewer)
-                {
-                    _builder.Append("  观战者");
-                }
-                else
-                {
-                    if (member.IsHost)
-                    {
-                        _builder.Append("  房主");
-                    }
-
-                    _builder.Append(member.IsReady ? "  已准备" : "  未准备");
-                }
-
-                if (!member.IsConnected)
-                {
-                    _builder.Append("  离线");
-                }
+                AppendMemberLine(member);
             }
+        }
+
+        private void AppendMemberLine(MiniGamePlayerViewData member)
+        {
+            if (member == null)
+            {
+                return;
+            }
+
+            _builder.AppendLine();
+            _builder.Append("- ");
+            _builder.Append(SafeDisplayName(member.DisplayName, member.PlayerId));
+
+            if (member.IsLocalPlayer)
+            {
+                _builder.Append("  我");
+            }
+
+            if (member.IsViewer)
+            {
+                _builder.Append("  观战者");
+            }
+            else
+            {
+                if (member.IsHost)
+                {
+                    _builder.Append("  房主");
+                }
+
+                _builder.Append(member.IsReady ? "  已准备" : "  未准备");
+            }
+
+            _builder.Append("  状态：");
+            _builder.Append(GetMemberStateText(member));
+
+            if (!member.IsConnected)
+            {
+                _builder.Append("  离线");
+            }
+        }
+
+        private static string GetMemberStateText(MiniGamePlayerViewData member)
+        {
+            if (member == null)
+            {
+                return "未知";
+            }
+
+            if (!string.IsNullOrWhiteSpace(member.PlayerStateText))
+            {
+                return member.PlayerStateText;
+            }
+
+            if (member.IsViewer)
+            {
+                return "观战中";
+            }
+
+            return member.IsReady ? "已准备" : "等待中";
         }
 
         private string BuildChatList(MiniGameChatViewData[] chats)
