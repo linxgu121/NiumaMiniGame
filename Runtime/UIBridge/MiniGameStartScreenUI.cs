@@ -598,7 +598,10 @@ namespace NiumaMiniGame.UIBridge
             if (showRoomFallback && !_warnedMissingRoomPanel)
             {
                 _warnedMissingRoomPanel = true;
-                Warn("已进入房间，但 RoomPanel 未绑定。请把房间大厅根节点拖到 MiniGameStartScreenUI 的 RoomPanel 字段，否则无法显示房间页面。");
+                if (logWarnings)
+                {
+                    Debug.LogWarning("[MiniGameStartScreenUI] 已进入房间，但 RoomPanel 未绑定。请把房间大厅根节点拖到 MiniGameStartScreenUI 的 RoomPanel 字段，否则无法显示房间页面。", this);
+                }
             }
 
             SetActive(startRoot, true);
