@@ -122,6 +122,33 @@ namespace NiumaMiniGame.Controller
             BumpRevision();
         }
 
+        /// <summary>
+        /// 清理当前房间相关的运行时状态，但保留连接、玩家 ID 和会话。
+        /// 离开房间请求发出后，本客户端通常不会再收到自己的 RoomSnapshot，因此需要本地乐观清理。
+        /// </summary>
+        public void ClearRoomState()
+        {
+            CurrentRoomId = null;
+            UdpBindToken = null;
+            UdpPort = 0;
+            LastCreateRoomResult = null;
+            LastJoinRoomResult = null;
+            LastReconnectResult = null;
+            LastUdpBindAccepted = null;
+            CurrentRoomSnapshot = null;
+            CurrentStage = null;
+            CurrentTask = null;
+            CurrentReview = null;
+            CurrentVoting = null;
+            CurrentVotingResult = null;
+            CurrentSequentialRelay = null;
+            LastGameEnded = null;
+            _chatMessages.Clear();
+            _giftMessages.Clear();
+            _strokeBatches.Clear();
+            BumpRevision();
+        }
+
         public void ApplyCreateRoomResult(CreateRoomResult result)
         {
             LastCreateRoomResult = result;

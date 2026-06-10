@@ -183,10 +183,17 @@ namespace NiumaMiniGame.Controller
 
         public bool LeaveRoom(string roomId = null)
         {
-            return SendReliable(new LeaveRoomRequest
+            var sent = SendReliable(new LeaveRoomRequest
             {
                 roomId = string.IsNullOrWhiteSpace(roomId) ? _blackboard.CurrentRoomId : roomId
             });
+
+            if (sent)
+            {
+                _blackboard.ClearRoomState();
+            }
+
+            return sent;
         }
 
         public bool SetReady(bool ready)

@@ -428,9 +428,11 @@ namespace NiumaMiniGame.UIBridge
 
         public void ClickLeaveRoom()
         {
-            if (ResolveController(true))
+            var sent = ResolveController(true) && miniGameController.LeaveRoom();
+            if (!sent)
             {
-                miniGameController.LeaveRoom();
+                ShowRoomTip("离开房间请求发送失败，请检查网络连接。", false);
+                return;
             }
 
             if (returnToPreviousSceneAfterLeaveRoom)
@@ -440,6 +442,7 @@ namespace NiumaMiniGame.UIBridge
             }
 
             _currentPage = MiniGameStartPage.Prepare;
+            _lastPanel = BuildLocalPanelAfterLeaving(_lastPanel);
             RefreshFromLastPanel();
         }
 
@@ -504,6 +507,7 @@ namespace NiumaMiniGame.UIBridge
                 ShowRoomTip(string.IsNullOrWhiteSpace(reason)
                     ? "当前玩家数量没满足模式需求无法开始游戏"
                     : reason, false);
+                return;
             }
 
             miniGameController.StartGame();
@@ -548,6 +552,21 @@ namespace NiumaMiniGame.UIBridge
             RefreshPanels(_lastPanel);
             RefreshTexts(_lastPanel);
             RefreshButtonStates(_lastPanel);
+        }
+
+        private MiniGamePanelViewData BuildLocalPanelAfterLeaving(MiniGamePanelViewData previous)
+        {
+            return new MiniGamePanelViewData
+            {
+                Revision = previous?.Revision ?? 0,
+                IsConnected = previous?.IsConnected ?? (miniGameController != null && miniGameController.IsConnected),
+                IsLocalViewer = false,
+                LocalPlayerId = previous?.LocalPlayerId ?? miniGameController?.LocalPlayerId,
+                SessionId = previous?.SessionId ?? miniGameController?.SessionId,
+                LastMessageType = previous?.LastMessageType,
+                Chats = Array.Empty<MiniGameChatViewData>(),
+                Gifts = Array.Empty<MiniGameGiftViewData>()
+            };
         }
 
         private void EnsureConnected()
@@ -929,7 +948,31 @@ namespace NiumaMiniGame.UIBridge
                 return false;
             }
 
+            if (HasDisconnectedPlayer(panel.Room.Players))
+            {
+                reason = "房间内有玩家已离线，无法开始游戏。";
+                return false;
+            }
+
             return true;
+        }
+
+        private static bool HasDisconnectedPlayer(MiniGamePlayerViewData[] players)
+        {
+            if (players == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < players.Length; i++)
+            {
+                if (players[i] != null && !players[i].IsConnected)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private bool IsLocalHost(MiniGamePanelViewData panel)
