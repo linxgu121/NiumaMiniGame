@@ -99,40 +99,39 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("可选的菜单弹层根节点。继续游戏按钮会隐藏它。")]
         [SerializeField] private GameObject menuPopupRoot;
 
-        [Header("文本")]
-        [Tooltip("当前作画人昵称文本。")]
-        [SerializeField] private TMP_Text drawerNameText;
+        [Header("整组显示绑定 - 可选")]
+        [Tooltip("作画人显示组。若该信息有背景板/图标/多个文字副本，拖 Root，并把文字加入 Texts。")]
+        [SerializeField] private MiniGameTextDisplayBinding drawerNameDisplay;
 
-        [Tooltip("题目文本。作画阶段显示当前词条或上一位玩家猜测词。")]
-        [SerializeField] private TMP_Text topicText;
+        [Tooltip("题目显示组。用于整组控制题目背景、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding topicDisplay;
 
-        [Tooltip("回答文本。结算阶段显示最终猜测词。")]
-        [SerializeField] private TMP_Text answerText;
+        [Tooltip("回答显示组。用于整组控制回答背景、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding answerDisplay;
 
-        [Tooltip("作答者昵称文本。")]
-        [SerializeField] private TMP_Text answererText;
+        [Tooltip("作答者显示组。用于整组控制作答者背景、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding answererDisplay;
 
-        [Tooltip("倒计时文本。")]
-        [SerializeField] private TMP_Text timerText;
+        [Tooltip("倒计时显示组。用于整组控制时间背景、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding timerDisplay;
 
-        [Tooltip("玩家列表文本。第一版用多行文本承载昵称和状态，后续可替换为列表项预制体。")]
-        [SerializeField] private TMP_Text playerListText;
+        [Tooltip("玩家列表显示组。用于整组控制玩家列表背景、标题、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding playerListDisplay;
 
-        [Tooltip("聊天记录文本。第一版用多行文本承载聊天，后续可替换为滚动列表。")]
-        [SerializeField] private TMP_Text chatLogText;
+        [Tooltip("聊天记录显示组。用于整组控制聊天框背景、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding chatLogDisplay;
 
-        [Tooltip("作画提示文本。")]
-        [SerializeField] private TMP_Text drawPromptText;
+        [Tooltip("开始作画提示显示组。用于整组控制提示弹窗背景、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding drawPromptDisplay;
 
-        [Tooltip("回答提示文本。")]
-        [SerializeField] private TMP_Text answerPromptText;
+        [Tooltip("开始回答提示显示组。用于整组控制提示弹窗背景、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding answerPromptDisplay;
 
-        [Tooltip("评价列表文本。")]
-        [SerializeField] private TMP_Text evaluationListText;
+        [Tooltip("评价列表显示组。用于整组控制评价列表背景、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding evaluationListDisplay;
 
-        [Tooltip("短提示文本。用于显示本地按钮错误或服务器 Toast。")]
-        [SerializeField] private TMP_Text toastText;
-
+        [Tooltip("短提示显示组。用于整组控制 Toast 背景、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding toastDisplay;
         [Header("输入框")]
         [Tooltip("聊天输入框。为空时发送按钮无效。")]
         [SerializeField] private TMP_InputField chatInput;
@@ -417,18 +416,18 @@ namespace NiumaMiniGame.UIBridge
 
         private void RefreshTexts(MiniGamePanelViewData panel, MiniGameGameplayViewData gameplay)
         {
-            SetText(drawerNameText, string.IsNullOrWhiteSpace(gameplay.CurrentDrawerDisplayName)
+            SetDisplayText(drawerNameDisplay, string.IsNullOrWhiteSpace(gameplay.CurrentDrawerDisplayName)
                 ? "作画人：--"
                 : $"作画人：{gameplay.CurrentDrawerDisplayName}");
 
-            SetText(topicText, BuildTopicText(gameplay));
-            SetText(answerText, BuildAnswerText(gameplay));
-            SetText(answererText, BuildAnswererText(gameplay));
-            SetText(drawPromptText, "轮到你作画了");
-            SetText(answerPromptText, "轮到你回答了");
-            SetText(playerListText, BuildPlayerListText(gameplay.Players));
-            SetText(chatLogText, BuildChatText(gameplay.Chats));
-            SetText(evaluationListText, BuildEvaluationText(gameplay.Evaluations));
+            SetDisplayText(topicDisplay, BuildTopicText(gameplay));
+            SetDisplayText(answerDisplay, BuildAnswerText(gameplay));
+            SetDisplayText(answererDisplay, BuildAnswererText(gameplay));
+            SetDisplayText(drawPromptDisplay, "轮到你作画了");
+            SetDisplayText(answerPromptDisplay, "轮到你回答了");
+            SetDisplayText(playerListDisplay, BuildPlayerListText(gameplay.Players));
+            SetDisplayText(chatLogDisplay, BuildChatText(gameplay.Chats));
+            SetDisplayText(evaluationListDisplay, BuildEvaluationText(gameplay.Evaluations));
 
             if (panel.LastToast != null && !string.IsNullOrWhiteSpace(panel.LastToast.Text))
             {
@@ -515,16 +514,11 @@ namespace NiumaMiniGame.UIBridge
 
         private void UpdateTimerText()
         {
-            if (timerText == null)
-            {
-                return;
-            }
-
             var current = CurrentRemainingSeconds();
             var totalSeconds = Mathf.CeilToInt(current);
             var minutes = totalSeconds / 60;
             var seconds = totalSeconds % 60;
-            timerText.text = $"{minutes:00}:{seconds:00}";
+            SetDisplayText(timerDisplay, $"{minutes:00}:{seconds:00}");
         }
 
         private void TryPlayCountdownAudio()
@@ -705,14 +699,17 @@ namespace NiumaMiniGame.UIBridge
 
         private void ShowToast(string text)
         {
-            if (toastText == null || string.IsNullOrWhiteSpace(text))
+            if (string.IsNullOrWhiteSpace(text))
             {
                 return;
             }
 
-            toastText.text = text;
-            toastText.gameObject.SetActive(true);
-        }
+            if (toastDisplay != null && toastDisplay.HasBinding)
+            {
+                toastDisplay.SetText(text);
+                return;
+            }
+}
 
         private void PlayOneShot(AudioClip clip)
         {
@@ -753,16 +750,15 @@ namespace NiumaMiniGame.UIBridge
                 selectable.interactable = interactable;
             }
         }
-
-        private static void SetText(TMP_Text text, string value)
+        private static void SetDisplayText(MiniGameTextDisplayBinding binding, string value)
         {
-            if (text != null)
+            if (binding != null && binding.HasBinding)
             {
-                text.text = value ?? string.Empty;
+                binding.SetText(value);
             }
         }
 
-        private void BindButtons()
+private void BindButtons()
         {
             Bind(pencilButton, ClickPencil);
             Bind(lineButton, ClickLine);

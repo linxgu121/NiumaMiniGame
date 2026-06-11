@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using NiumaMiniGame.Bridge;
 using NiumaMiniGame.Controller;
@@ -23,7 +23,7 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("模式显示名称，用于开始场景和房间大厅 UI。")]
         public string DisplayName = "你画我猜";
 
-        [Tooltip("该模式自己的展示图。每个 ModeOption 单独配置一张；ModeDisplayImage 只是场景里的 Image 显示容器。为空时只显示文字。")]
+        [Tooltip("该模式自己的展示图。每个 ModeOption 单独配置一张；显示容器绑定到 ModeDisplayGroup.Images。为空时只显示文字。")]
         public Sprite DisplaySprite;
 
         [Tooltip("最少玩家数量。你画我猜第一版至少需要 2 名玩家。")]
@@ -35,6 +35,97 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("是否要求玩家数量为偶数。当前你画我猜玩法要求偶数人数。")]
         public bool RequireEvenPlayers = true;
     }
+    [Serializable]
+    public sealed class MiniGameTextDisplayBinding
+    {
+        [Tooltip("整组显示根节点。用于把背景板、图标、文字作为一个整体显示/隐藏；如果只想改文字，可留空。")]
+        public GameObject Root;
+[Tooltip("该显示组里的文字组件数组。可以自由添加数量，例如主文字、阴影文字、描边副本文字都会写入同一内容。")]
+        public TMP_Text[] Texts = Array.Empty<TMP_Text>();
+[Tooltip("该显示组里的图片组件数组。可以自由添加数量，例如模式图、图标副本等都会写入同一 Sprite；纯背景图只要放在 Root 下即可，不必拖到这里。")]
+        public Image[] Images = Array.Empty<Image>();
+
+        [Tooltip("文字内容为空时是否隐藏 Root。提示、错误、名单等临时显示建议开启；固定装饰组可关闭。")]
+        public bool HideRootWhenEmpty = true;
+
+        public bool HasBinding => Root != null || HasAny(Texts) || HasAny(Images);
+
+        public void SetText(string value)
+        {
+            var normalized = value ?? string.Empty;
+SetAllTexts(Texts, normalized);
+
+            if (Root != null && HideRootWhenEmpty)
+            {
+                Root.SetActive(!string.IsNullOrWhiteSpace(normalized));
+            }
+        }
+
+        public void SetTextAndImage(string value, Sprite sprite)
+        {
+            SetText(value);
+            SetAllImages(Images, sprite);
+        }
+
+        private static void SetAllTexts(TMP_Text[] targets, string value)
+        {
+            if (targets == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < targets.Length; i++)
+            {
+                if (targets[i] != null)
+                {
+                    targets[i].text = value;
+                }
+            }
+        }
+
+        private static void SetAllImages(Image[] targets, Sprite sprite)
+        {
+            if (targets == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < targets.Length; i++)
+            {
+                SetImage(targets[i], sprite);
+            }
+        }
+
+        private static void SetImage(Image target, Sprite sprite)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            target.sprite = sprite;
+            target.enabled = sprite != null;
+        }
+
+        private static bool HasAny<T>(T[] values) where T : UnityEngine.Object
+        {
+            if (values == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (values[i] != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
 
     internal enum MiniGameStartPage
     {
@@ -67,16 +158,16 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("房间大厅面板：进入房间后显示房间号、玩家、观战者、聊天、准备、开始游戏等内容。")]
         [SerializeField] private GameObject roomPanel;
 
-        [Tooltip("入口页：显示“开始游戏”和“退出游戏”。正式新版 UI 必填；为空时仅作为旧版兼容，使用 entryPanel 流程。")]
+        [Tooltip("入口页：显示“开始游戏”和“退出游戏”。正式新版 UI 必填；为空时脚本不会主动控制入口页。")]
         [SerializeField] private GameObject homePanel;
 
         [Tooltip("取名页：玩家点击开始游戏后输入昵称，并带返回按钮。为空时会直接进入预备页。")]
         [SerializeField] private GameObject namingPanel;
 
-        [Tooltip("预备页：显示创建房间、加入房间、观战加入、返回。正式新版 UI 必填；为空时复用旧版 entryPanel。")]
+        [Tooltip("预备页：显示创建房间、加入房间、观战加入、返回。正式新版 UI 必填；为空时脚本不会主动控制预备页。")]
         [SerializeField] private GameObject preparePanel;
 
-        [Tooltip("房间号输入页：加入房间和观战加入共用，必须带进入和返回按钮。为空时点击加入按钮会沿用旧版直接加入逻辑。")]
+        [Tooltip("房间号输入页：加入房间和观战加入共用，必须带进入和返回按钮。为空时无法打开输入页。")]
         [SerializeField] private GameObject roomInputPanel;
 
         [Header("面板节点 - 房间身份控件")]
@@ -143,7 +234,7 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("放在 RoomPanel 的身份切换按钮。玩家点击后切为观战者；观战者点击后切为玩家。只在房间大厅 Lobby 状态可用。")]
         [SerializeField] private Button switchRoleButton;
 
-        [Tooltip("房间页返回按钮。点击后离开当前房间并回到预备页，不返回 RPG。新版 UI 只绑定这个，不再绑定 LeaveRoomButton。")]
+        [Tooltip("房间页返回按钮。点击后离开当前房间并回到预备页，不返回 RPG。")]
         [SerializeField] private Button roomBackButton;
 
         [Tooltip("房主开始游戏按钮。点击后发送 StartGameRequest，由后端统一校验人数和模式规则。")]
@@ -162,47 +253,42 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("可选：模式 ID 输入框。正式新版 UI 推荐用 ModeOptions + ModeSelectButton，不建议让策划在界面上手填 modeId。")]
         [SerializeField] private TMP_InputField modeIdInput;
 
-        [Header("文本显示")]
-        [Tooltip("建议放在 RoomPanel 或调试区的连接状态文本。拖 TMP_Text 组件即可，运行时自动写入“已连接/未连接”，策划不需要在这里填写文字内容。")]
-        [SerializeField] private TMP_Text connectionText;
+        [Header("整组显示绑定 - 可选")]
+        [Tooltip("连接状态显示组。拖整组 Root，并把组内一个或多个文字拖到 Texts。")]
+        [SerializeField] private MiniGameTextDisplayBinding connectionDisplay;
 
-        [Tooltip("建议放在 RoomPanel 顶部信息区的房间摘要文本。拖 TMP_Text 组件，运行时自动写入房间号、模式、房主和本机身份。")]
-        [SerializeField] private TMP_Text roomText;
+        [Tooltip("房间摘要显示组。用于整组控制房间摘要背景、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding roomSummaryDisplay;
 
-        [Tooltip("放在 RoomPanel 的玩家列表区域。拖 TMP_Text 组件，运行时自动显示玩家昵称、房主、准备/未准备、状态、离线。")]
-        [SerializeField] private TMP_Text playersText;
+        [Tooltip("玩家列表显示组。用于整组控制玩家名单背景、标题、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding playersDisplay;
 
-        [Tooltip("放在 RoomPanel 的观战者列表区域。拖 TMP_Text 组件，运行时自动显示观战者昵称、观战状态、离线；如果没有单独区域，可只用 NicknameListText。")]
-        [SerializeField] private TMP_Text viewersText;
+        [Tooltip("观战者列表显示组。用于整组控制观战名单背景、标题、图标和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding viewersDisplay;
 
-        [Tooltip("建议放在 StartScreen 顶层或当前页面底部的流程提示文本。拖 TMP_Text 组件，运行时自动写入当前可执行操作。")]
-        [SerializeField] private TMP_Text hintText;
+        [Tooltip("流程提示显示组。用于整组控制提示背景和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding hintDisplay;
 
-        [Tooltip("建议放在 StartScreen 顶层错误提示区域。拖 TMP_Text 组件，运行时自动显示服务器或 Mock 返回的错误。")]
-        [SerializeField] private TMP_Text errorText;
+        [Tooltip("错误提示显示组。用于整组控制错误弹窗/背景/图标/文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding errorDisplay;
 
-        [Tooltip("放在 RoomPanel 的模式显示区域。拖 TMP_Text 组件，运行时自动显示当前模式的 DisplayName。")]
-        [SerializeField] private TMP_Text modeDisplayText;
+        [Tooltip("模式显示组。Root 绑定整组，Texts 显示模式名，Images 显示当前 ModeOptions.DisplaySprite。")]
+        [SerializeField] private MiniGameTextDisplayBinding modeDisplayGroup;
 
-        [Tooltip("放在 RoomPanel 的房间号显示区域。拖 TMP_Text 组件，运行时自动显示系统分配或玩家加入的房间号。")]
-        [SerializeField] private TMP_Text roomIdText;
+        [Tooltip("房间号显示组。用于整组控制房间号背景和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding roomIdDisplay;
 
-        [Tooltip("放在 RoomPanel 的人数显示区域。拖 TMP_Text 组件，运行时自动显示当前玩家数量，不包含观战者。")]
-        [SerializeField] private TMP_Text playerCountText;
+        [Tooltip("人数显示组。用于整组控制人数背景和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding playerCountDisplay;
 
-        [Tooltip("放在 RoomPanel 的合并名单区域。拖 TMP_Text 组件，运行时自动显示玩家列表 + 观战者列表；如果 UI 已分开显示，可不绑定这里，只绑定 PlayersText 和 ViewersText。")]
-        [SerializeField] private TMP_Text nicknameListText;
+        [Tooltip("合并名单显示组。用于整组控制玩家+观战者合并名单背景和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding nicknameListDisplay;
 
-        [Tooltip("放在 RoomPanel 的聊天记录框。拖 TMP_Text 组件，运行时自动追加房间聊天内容。")]
-        [SerializeField] private TMP_Text chatMessagesText;
+        [Tooltip("聊天记录显示组。用于整组控制聊天框背景和文字。")]
+        [SerializeField] private MiniGameTextDisplayBinding chatMessagesDisplay;
 
-        [Tooltip("建议放在 StartScreen 顶层短提示区域。拖 TMP_Text 组件，运行时显示人数不足等 2 秒提示；为空时复用 HintText。")]
-        [SerializeField] private TMP_Text toastText;
-
-        [Header("图片显示")]
-        [Tooltip("放在 RoomPanel 的模式展示图片区。拖 Image 组件，不是在这里填固定图片；实际图片来自当前 ModeOption.DisplaySprite。")]
-        [SerializeField] private Image modeDisplayImage;
-
+        [Tooltip("短提示显示组。用于整组控制 Toast 背景、图标和文字；为空时不会显示 Toast。")]
+        [SerializeField] private MiniGameTextDisplayBinding toastDisplay;
         [Header("默认配置")]
         [Tooltip("默认模式 ID。当前你画我猜使用 draw_telephone。")]
         [SerializeField] private string defaultModeId = "draw_telephone";
@@ -246,21 +332,7 @@ namespace NiumaMiniGame.UIBridge
 
         [Tooltip("为 true 时，缺少引用或 EventSystem 时输出警告。")]
         [SerializeField] private bool logWarnings = true;
-
-        // 旧版兼容字段保留序列化，避免旧场景丢失引用；新版 UI 不再在 Inspector 暴露，减少策划误绑。
-        [HideInInspector]
-        [SerializeField] private GameObject entryPanel;
-
-        [HideInInspector]
-        [SerializeField] private Button leaveRoomButton;
-
-        [HideInInspector]
-        [SerializeField] private Button returnSceneButton;
-
-        [HideInInspector]
-        [SerializeField] private bool returnToPreviousSceneAfterLeaveRoom;
-
-        private readonly StringBuilder _builder = new StringBuilder(512);
+private readonly StringBuilder _builder = new StringBuilder(512);
         private CursorLockMode _previousLockMode;
         private bool _previousCursorVisible;
         private bool _hasCursorSnapshot;
@@ -443,14 +515,7 @@ namespace NiumaMiniGame.UIBridge
                 ShowRoomTip("离开房间请求发送失败，请检查网络连接。", false);
                 return;
             }
-
-            if (returnToPreviousSceneAfterLeaveRoom)
-            {
-                ReturnToPreviousScene();
-                return;
-            }
-
-            _currentPage = MiniGameStartPage.Prepare;
+_currentPage = MiniGameStartPage.Prepare;
             _lastPanel = BuildLocalPanelAfterLeaving(_lastPanel);
             RefreshFromLastPanel();
         }
@@ -553,7 +618,7 @@ namespace NiumaMiniGame.UIBridge
             }
 
             _currentPage = MiniGameStartPage.RoomInput;
-            SetText(hintText, asViewer ? "输入房间号后，将以观战者身份加入。" : "输入房间号后，将以玩家身份加入。");
+            SetDisplayText(hintDisplay, asViewer ? "输入房间号后，将以观战者身份加入。" : "输入房间号后，将以玩家身份加入。");
             RefreshFromLastPanel();
         }
 
@@ -634,22 +699,13 @@ namespace NiumaMiniGame.UIBridge
             }
 
             SetActive(startRoot, true);
-            if (!UsesPagedFlow())
-            {
-                SetActive(entryPanel, !hasRoom || showRoomFallback);
-                SetActive(roomPanel, hasRoom);
-            }
-            else
-            {
-                SetActive(homePanel, !hasRoom && _currentPage == MiniGameStartPage.Home);
-                SetActive(namingPanel, !hasRoom && _currentPage == MiniGameStartPage.Naming);
-                SetActive(preparePanel, (!hasRoom && _currentPage == MiniGameStartPage.Prepare) || (showRoomFallback && preparePanel != null));
-                SetActive(roomInputPanel, !hasRoom && _currentPage == MiniGameStartPage.RoomInput);
-                SetActive(entryPanel, (!hasRoom && preparePanel == null && _currentPage == MiniGameStartPage.Prepare) || (showRoomFallback && preparePanel == null));
-                SetActive(roomPanel, hasRoom);
-            }
+            SetActive(homePanel, !hasRoom && _currentPage == MiniGameStartPage.Home);
+            SetActive(namingPanel, !hasRoom && _currentPage == MiniGameStartPage.Naming);
+            SetActive(preparePanel, (!hasRoom && _currentPage == MiniGameStartPage.Prepare) || (showRoomFallback && preparePanel != null));
+            SetActive(roomInputPanel, !hasRoom && _currentPage == MiniGameStartPage.RoomInput);
+            SetActive(roomPanel, hasRoom);
 
-            var isHost = IsLocalHost(panel);
+var isHost = IsLocalHost(panel);
             var isViewer = panel != null && panel.IsLocalViewer;
             SetActive(hostRoomControls, hasRoom && isHost && !isViewer);
             SetActive(guestRoomControls, hasRoom && !isHost && !isViewer);
@@ -661,45 +717,45 @@ namespace NiumaMiniGame.UIBridge
 
             if (panel == null)
             {
-                SetText(connectionText, "未连接");
-                SetText(roomText, "未进入房间");
-                SetText(roomIdText, string.Empty);
-                SetText(playerCountText, "当前人数：0");
-                SetText(nicknameListText, string.Empty);
-                SetText(chatMessagesText, string.Empty);
-                SetText(playersText, string.Empty);
-                SetText(viewersText, string.Empty);
-                SetText(hintText, BuildPageHint());
+                SetDisplayText(connectionDisplay, "未连接");
+                SetDisplayText(roomSummaryDisplay, "未进入房间");
+                SetDisplayText(roomIdDisplay, string.Empty);
+                SetDisplayText(playerCountDisplay, "当前人数：0");
+                SetDisplayText(nicknameListDisplay, string.Empty);
+                SetDisplayText(chatMessagesDisplay, string.Empty);
+                SetDisplayText(playersDisplay, string.Empty);
+                SetDisplayText(viewersDisplay, string.Empty);
+                SetDisplayText(hintDisplay, BuildPageHint());
                 ClearError();
                 return;
             }
 
-            SetText(connectionText, panel.IsConnected
+            SetDisplayText(connectionDisplay, panel.IsConnected
                 ? $"已连接  玩家ID：{ShortId(panel.LocalPlayerId)}"
                 : "未连接");
 
             if (panel.Room == null)
             {
                 var waitingForRoomSnapshot = IsWaitingForRoomSnapshot(panel);
-                SetText(roomText, waitingForRoomSnapshot ? "房间已创建，正在同步房间大厅数据..." : "未进入房间");
-                SetText(roomIdText, waitingForRoomSnapshot ? $"房间号：{panel.RoomId}" : string.Empty);
-                SetText(playerCountText, waitingForRoomSnapshot ? "当前人数：同步中" : "当前人数：0");
-                SetText(nicknameListText, string.Empty);
-                SetText(chatMessagesText, BuildChatList(panel.Chats));
-                SetText(playersText, string.Empty);
-                SetText(viewersText, string.Empty);
-                SetText(hintText, waitingForRoomSnapshot ? "服务器已分配房间号，正在等待 RoomSnapshot。若长时间停留，请检查后端是否广播 RoomSnapshot。" : BuildPageHint());
+                SetDisplayText(roomSummaryDisplay, waitingForRoomSnapshot ? "房间已创建，正在同步房间大厅数据..." : "未进入房间");
+                SetDisplayText(roomIdDisplay, waitingForRoomSnapshot ? $"房间号：{panel.RoomId}" : string.Empty);
+                SetDisplayText(playerCountDisplay, waitingForRoomSnapshot ? "当前人数：同步中" : "当前人数：0");
+                SetDisplayText(nicknameListDisplay, string.Empty);
+                SetDisplayText(chatMessagesDisplay, BuildChatList(panel.Chats));
+                SetDisplayText(playersDisplay, string.Empty);
+                SetDisplayText(viewersDisplay, string.Empty);
+                SetDisplayText(hintDisplay, waitingForRoomSnapshot ? "服务器已分配房间号，正在等待 RoomSnapshot。若长时间停留，请检查后端是否广播 RoomSnapshot。" : BuildPageHint());
             }
             else
             {
-                SetText(roomText, BuildRoomSummary(panel.Room, panel.IsLocalViewer));
-                SetText(roomIdText, $"房间号：{panel.Room.RoomId}");
-                SetText(playerCountText, $"当前人数：{CountPlayers(panel.Room.Players)}");
-                SetText(nicknameListText, BuildRoomMemberList(panel.Room));
-                SetText(playersText, BuildPlayerList("玩家", panel.Room.Players));
-                SetText(viewersText, BuildPlayerList("观战", panel.Room.Viewers));
-                SetText(chatMessagesText, BuildChatList(panel.Chats));
-                SetText(hintText, BuildHint(panel));
+                SetDisplayText(roomSummaryDisplay, BuildRoomSummary(panel.Room, panel.IsLocalViewer));
+                SetDisplayText(roomIdDisplay, $"房间号：{panel.Room.RoomId}");
+                SetDisplayText(playerCountDisplay, $"当前人数：{CountPlayers(panel.Room.Players)}");
+                SetDisplayText(nicknameListDisplay, BuildRoomMemberList(panel.Room));
+                SetDisplayText(playersDisplay, BuildPlayerList("玩家", panel.Room.Players));
+                SetDisplayText(viewersDisplay, BuildPlayerList("观战", panel.Room.Viewers));
+                SetDisplayText(chatMessagesDisplay, BuildChatList(panel.Chats));
+                SetDisplayText(hintDisplay, BuildHint(panel));
             }
 
             ApplyPanelError(BuildErrorText(panel.LastError));
@@ -722,10 +778,8 @@ namespace NiumaMiniGame.UIBridge
             SetInteractable(readyButton, connected && hasRoom && inLobby && !isViewer && !isHost);
             SetInteractable(unreadyButton, connected && hasRoom && inLobby && !isViewer && !isHost);
             SetInteractable(switchRoleButton, connected && hasRoom && inLobby);
-            SetInteractable(leaveRoomButton, connected && hasRoom);
             SetInteractable(roomBackButton, connected && hasRoom);
             SetInteractable(exitGameButton, true);
-            SetInteractable(returnSceneButton, true);
             SetInteractable(sendChatButton, connected && hasRoom);
             SetInteractable(enterGameButton, !hasRoom && !waitingForRoomSnapshot);
             SetInteractable(confirmNameButton, !hasRoom && !waitingForRoomSnapshot);
@@ -916,12 +970,7 @@ namespace NiumaMiniGame.UIBridge
                 ? mode.DisplayName
                 : modeId;
 
-            SetText(modeDisplayText, $"模式：{displayName}");
-            if (modeDisplayImage != null)
-            {
-                modeDisplayImage.sprite = mode?.DisplaySprite;
-                modeDisplayImage.enabled = mode?.DisplaySprite != null;
-            }
+            SetModeDisplay($"模式：{displayName}", mode?.DisplaySprite);
         }
 
         private bool CanStartCurrentMode(MiniGamePanelViewData panel, out string reason)
@@ -993,7 +1042,7 @@ namespace NiumaMiniGame.UIBridge
 
         private void ShowRoomTip(string message, bool syncToChat)
         {
-            SetText(GetToastTarget(), message);
+            SetToastText(message);
             _toastHideTime = Time.unscaledTime + Mathf.Max(0.1f, toastSeconds);
 
             if (syncToChat && ResolveController(false) && miniGameController.IsConnected && !string.IsNullOrWhiteSpace(_lastPanel?.RoomId))
@@ -1011,7 +1060,7 @@ namespace NiumaMiniGame.UIBridge
             }
 
             _lastAppliedErrorText = message;
-            SetText(errorText, message);
+            SetDisplayText(errorDisplay, message);
             _errorHideTime = Time.unscaledTime + Mathf.Max(0.1f, errorSeconds);
         }
 
@@ -1040,13 +1089,13 @@ namespace NiumaMiniGame.UIBridge
         private void ClearToast()
         {
             _toastHideTime = -1f;
-            SetText(GetToastTarget(), string.Empty);
+            SetToastText(string.Empty);
         }
 
         private void HideError()
         {
             _errorHideTime = -1f;
-            SetText(errorText, string.Empty);
+            SetDisplayText(errorDisplay, string.Empty);
         }
 
         private void ClearError()
@@ -1071,10 +1120,24 @@ namespace NiumaMiniGame.UIBridge
             ShowRoomTip(toast.Text, false);
         }
 
-        private TMP_Text GetToastTarget()
+        private void SetToastText(string value)
         {
-            return toastText != null ? toastText : hintText;
+            if (toastDisplay != null && toastDisplay.HasBinding)
+            {
+                toastDisplay.SetText(value);
+                return;
+            }
+            SetDisplayText(hintDisplay, value);
         }
+
+        private void SetModeDisplay(string value, Sprite sprite)
+        {
+            if (modeDisplayGroup != null && modeDisplayGroup.HasBinding)
+            {
+                modeDisplayGroup.SetTextAndImage(value, sprite);
+                return;
+            }
+}
 
         private static bool HasRoomSnapshot(MiniGamePanelViewData panel)
         {
@@ -1085,16 +1148,7 @@ namespace NiumaMiniGame.UIBridge
         {
             return panel?.Room == null && !string.IsNullOrWhiteSpace(panel?.RoomId);
         }
-
-        private bool UsesPagedFlow()
-        {
-            return homePanel != null
-                   || namingPanel != null
-                   || preparePanel != null
-                   || roomInputPanel != null;
-        }
-
-        private int CountPlayers(MiniGamePlayerViewData[] players)
+private int CountPlayers(MiniGamePlayerViewData[] players)
         {
             var count = 0;
             if (players == null)
@@ -1260,10 +1314,8 @@ namespace NiumaMiniGame.UIBridge
             BindButton(readyButton, ClickReady);
             BindButton(unreadyButton, ClickUnready);
             BindButton(switchRoleButton, ClickSwitchRole);
-            BindButton(leaveRoomButton, ClickLeaveRoom);
             BindButton(roomBackButton, ClickLeaveRoom);
             BindButton(exitGameButton, ClickReturnToPreviousScene);
-            BindButton(returnSceneButton, ClickReturnToPreviousScene);
             BindButton(sendChatButton, ClickSendChat);
             BindButton(enterGameButton, ClickEnterGame);
             BindButton(confirmNameButton, ClickConfirmName);
@@ -1284,10 +1336,8 @@ namespace NiumaMiniGame.UIBridge
             UnbindButton(readyButton, ClickReady);
             UnbindButton(unreadyButton, ClickUnready);
             UnbindButton(switchRoleButton, ClickSwitchRole);
-            UnbindButton(leaveRoomButton, ClickLeaveRoom);
             UnbindButton(roomBackButton, ClickLeaveRoom);
             UnbindButton(exitGameButton, ClickReturnToPreviousScene);
-            UnbindButton(returnSceneButton, ClickReturnToPreviousScene);
             UnbindButton(sendChatButton, ClickSendChat);
             UnbindButton(enterGameButton, ClickEnterGame);
             UnbindButton(confirmNameButton, ClickConfirmName);
@@ -1524,16 +1574,15 @@ namespace NiumaMiniGame.UIBridge
             Cursor.visible = _previousCursorVisible;
             _hasCursorSnapshot = false;
         }
-
-        private static void SetText(TMP_Text target, string value)
+        private static void SetDisplayText(MiniGameTextDisplayBinding binding, string value)
         {
-            if (target != null)
+            if (binding != null && binding.HasBinding)
             {
-                target.text = value ?? string.Empty;
+                binding.SetText(value);
             }
         }
 
-        private static void SetActive(GameObject target, bool active)
+private static void SetActive(GameObject target, bool active)
         {
             if (target != null && target.activeSelf != active)
             {
@@ -1560,3 +1609,5 @@ namespace NiumaMiniGame.UIBridge
         }
     }
 }
+
+

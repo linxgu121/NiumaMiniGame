@@ -1,4 +1,4 @@
-﻿# NiumaMiniGame
+# NiumaMiniGame
 
 ## 模块定位
 NiumaMiniGame 是联机小游戏前端模块，当前核心玩法为你画我猜/画猜传话，负责房间协议、Mock 客户端、网络抽象、房间黑板、绘画点位、聊天、礼物、游戏中 UI 数据和 Gal 入口桥接。
@@ -30,7 +30,7 @@ NiumaMiniGame 是联机小游戏前端模块，当前核心玩法为你画我猜
 - RPG 场景 `NPC_MiniGame`：对话选项配置 OpenMiniGame Action。
 - RPG 场景 `MiniGameGalBridge`：挂 `MiniGameDialogueActionHandler`，绑定 NiumaDialogueController 和 NiumaSceneController。
 - MiniGame 开始/房间场景 `MiniGameRoot`：挂 `NiumaMiniGameController`，绑定 IRealtimeNetworkClient 实现或 MockRealtimeNetworkClient。
-- `MiniGameUIRoot/StartScreen`：挂 `MiniGameStartScreenUI`，新版流程只绑定一套页面：`HomePanel` 入口页、`NamingPanel` 取名页、`PreparePanel` 预备页、`RoomInputPanel` 房间号输入页、`RoomPanel` 房间大厅页。旧版 `EntryPanel / LeaveRoomButton / ReturnSceneButton` 已隐藏保留兼容，新 UI 不需要再绑定。
+- `MiniGameUIRoot/StartScreen`：挂 `MiniGameStartScreenUI`，新版流程只绑定一套页面：`HomePanel` 入口页、`NamingPanel` 取名页、`PreparePanel` 预备页、`RoomInputPanel` 房间号输入页、`RoomPanel` 房间大厅页。只保留新版分页字段，策划按当前 README 重新绑定即可。
 - `MiniGameUIRoot/StartScreen` 场景跳转配置：绑定 `SceneController` 为全局 `NiumaSceneController`；`Fallback Return Scene Name` 填外部 RPG 场景名，例如 `TestSence1`。正式从 RPG 入口进入时会走 ReturnContext；直接打开 MiniGame 场景测试时会用该兜底场景。
 - `MiniGameUIRoot/StartScreen/HomePanel`：放“开始游戏”和“退出游戏”。开始游戏按钮只绑定 `EnterGameButton`，退出游戏按钮只绑定 `ExitGameButton`。
 - `MiniGameUIRoot/StartScreen/NamingPanel`：放昵称输入框、确认按钮和返回按钮。确认按钮绑定 `ConfirmNameButton`，返回按钮绑定 `NamingBackButton`。
@@ -38,9 +38,9 @@ NiumaMiniGame 是联机小游戏前端模块，当前核心玩法为你画我猜
 - `MiniGameUIRoot/StartScreen/RoomInputPanel`：放房间号输入框、进入按钮和返回按钮。进入按钮绑定 `RoomInputEnterButton`，返回按钮绑定 `RoomInputBackButton`。
 - `MiniGameUIRoot/StartScreen/RoomPanel`：放房间号、当前玩家数量、玩家昵称列表、观战者昵称列表、聊天框、模式切换、身份切换、房主开始游戏、普通玩家准备、房间返回和退出游戏。房间返回按钮只绑定 `RoomBackButton`，只离开房间回预备页；退出游戏按钮继续绑定 `ExitGameButton`，返回 RPG。
 - 可选调试按钮：`ConnectButton` 只在需要单独测试连接状态时绑定。正常创建/加入房间会自动连接，不需要给正式 UI 摆连接按钮。
-- 房间大厅名单显示：`PlayersText` 会显示玩家昵称、本机标记、房主、准备/未准备、状态、离线；`ViewersText` 会显示观战者昵称、本机标记、观战者、状态、离线。若 UI 只有一个名单文本，绑定 `NicknameListText` 会合并显示玩家和观战者。
+- 房间大厅名单显示：使用 `PlayersDisplay` 显示玩家昵称、本机标记、房主、准备/未准备、状态、离线；使用 `ViewersDisplay` 显示观战者昵称、本机标记、观战者、状态、离线。若 UI 只有一个名单区域，绑定 `NicknameListDisplay` 合并显示玩家和观战者。
 - `MiniGameUIRoot/Bridge`：挂 `MiniGameUIViewBridge`，绑定 NiumaMiniGameController 和 StartScreen/GameScreen Receiver。
-- 游戏中场景 `MiniGameUIRoot/GameplayScreen`：挂 `MiniGameGameplayScreenUI`。
+- 游戏中场景 `MiniGameUIRoot/GameplayScreen`：挂 `MiniGameGameplayScreenUI`，模块根节点负责开放/显示/隐藏，显示内容优先使用整组 Display 绑定。
 - `MiniGameUIRoot/DrawingCanvas`：挂 `MiniGameDrawingCanvas`，绑定画布 RawImage/Texture、笔刷工具和输入事件。
 - 礼物按钮物体挂 `MiniGameGiftDragButton`，拖拽目标限制在画布或答案模块。
 - 游戏结束返回房间由 UI/Controller 处理；退出整个小游戏时通过 `MiniGameGameplaySceneReturnBridge` 或 NiumaScene.ReturnToPreviousScene 回 RPG。
@@ -70,13 +70,12 @@ Canvas
         │   ├── EnterButton -> RoomInputEnterButton
         │   └── BackButton -> RoomInputBackButton
         ├── RoomPanel（房间大厅页）
-        │   ├── RoomIdText -> RoomIdText
-        │   ├── PlayerCountText -> PlayerCountText
-        │   ├── ModeNameText -> ModeDisplayText
-        │   ├── ModeImage -> ModeDisplayImage
-        │   ├── PlayersText -> PlayersText
-        │   ├── ViewersText -> ViewersText
-        │   ├── ChatMessagesText -> ChatMessagesText
+        │   ├── RoomIdDisplayGroup -> RoomIdDisplay.Root / Texts
+        │   ├── PlayerCountDisplayGroup -> PlayerCountDisplay.Root / Texts
+        │   ├── ModeDisplayGroup -> ModeDisplayGroup.Root / Texts / Images
+        │   ├── PlayersDisplayGroup -> PlayersDisplay.Root / Texts
+        │   ├── ViewersDisplayGroup -> ViewersDisplay.Root / Texts
+        │   ├── ChatMessagesDisplayGroup -> ChatMessagesDisplay.Root / Texts
         │   ├── ChatInput -> ChatInput
         │   ├── SendChatButton -> SendChatButton
         │   ├── HostControls -> HostRoomControls
@@ -86,14 +85,14 @@ Canvas
         │   ├── SwitchRoleButton -> SwitchRoleButton（玩家/观战身份互切）
         │   ├── RoomBackButton -> RoomBackButton
         │   └── ExitButton -> ExitGameButton
-        ├── HintText -> HintText（顶层提示，可放页面底部）
-        ├── ErrorText -> ErrorText（顶层错误提示）
-        └── ToastText -> ToastText（顶层短提示）
+        ├── HintDisplayGroup -> HintDisplay.Root / Texts（顶层提示，可放页面底部）
+        ├── ErrorDisplayGroup -> ErrorDisplay.Root / Texts（顶层错误提示）
+        └── ToastDisplayGroup -> ToastDisplay.Root / Texts（顶层短提示）
 ```
 
 `HomePanel / NamingPanel / PreparePanel / RoomInputPanel / RoomPanel` 是页面根节点，脚本会自动控制显示隐藏。按钮和文本字段不是用来填写文字内容，而是把场景里已经摆好的 UI 组件拖到脚本上，让运行时自动刷新。
 
-模式图片不要只在 `ModeDisplayImage` 上放一张固定图。正确做法是：`ModeDisplayImage` 拖 RoomPanel 里的 Image 组件；每个 `ModeOptions` 元素的 `DisplaySprite` 分别配置该模式自己的展示图。
+模式图片不要只在某个 Image 上放一张固定图。正确做法是：把模式显示整组拖到 `ModeDisplayGroup`，其中 `Images` 数组拖需要跟随模式切换的展示图组件；每个 `ModeOptions` 元素的 `DisplaySprite` 分别配置该模式自己的展示图。
 
 ### MiniGameStartScreenUI 场景初始显隐设置
 这里说的是 **UI 场景制作完成并保存时**，各个 UI 物体在 Hierarchy 里应该是激活还是隐藏。运行时切页由 `MiniGameStartScreenUI` 负责，策划不要在按钮事件里手动 `SetActive` 这些页面根节点。
@@ -115,8 +114,8 @@ Canvas
 | `HostRoomControls` | 隐藏 | 进入房间后，如果本机是房主，脚本显示。 |
 | `GuestRoomControls` | 隐藏 | 进入房间后，如果本机是普通玩家，脚本显示。 |
 | `ViewerRoomControls` | 隐藏 | 进入房间后，如果本机是观战者，脚本显示。 |
-| `HintText / ErrorText / ToastText` 所在物体 | 建议激活 | 文本内容可为空，脚本会写入提示；如果做成整块弹窗，可默认隐藏弹窗根节点。 |
-| `ModeDisplayImage` 所在物体 | 跟随 `RoomPanel` | 它放在房间页里，房间页隐藏时它自然隐藏。 |
+| `HintDisplay / ErrorDisplay / ToastDisplay` 的 Root | 建议激活或按设计隐藏 | 内容可为空，脚本会写入提示；如果做成整块弹窗，可开启 `Hide Root When Empty` 自动隐藏。 |
+| `ModeDisplayGroup` 的 Root | 跟随 `RoomPanel` | 它放在房间页里，房间页隐藏时它自然隐藏。 |
 
 制作规则：
 
@@ -182,7 +181,7 @@ MiniGame 不直接操作 RPG 玩家控制和存档。场景切换交给 NiumaSce
 | --- | --- | --- | --- |
 | `MiniGame Controller` | 拖 `NiumaMiniGameController` | 不建议 | 按钮无法操作房间 |
 | `Scene Controller` | 拖核心场景 `NiumaSceneController` | 退出/切玩法场景时不建议 | 退出游戏、进入玩法场景会失败 |
-| `Home / Naming / Prepare / RoomInput / Room Panel` | 拖对应 UI 根节点 | 按流程决定 | 留空会走兼容流程或不控制该页显示 |
+| `Home / Naming / Prepare / RoomInput / Room Panel` | 拖对应 UI 根节点 | 必填 | 留空则脚本不会控制该页显隐，正式 UI 不建议留空 |
 | `Exit Game Button` | 拖退出 MiniGame 回 RPG 的按钮 | 可以 | 需要手动绑定事件 |
 | `EnterGameButton` | 拖入口页“开始游戏”按钮 | 不建议 | 玩家无法从入口页进入取名/预备页 |
 | `ConfirmNameButton / NamingBackButton` | 拖取名页确认和返回按钮 | 取名页存在时不建议留空 | 取名页无法确认或返回 |
@@ -192,18 +191,105 @@ MiniGame 不直接操作 RPG 玩家控制和存档。场景切换交给 NiumaSce
 | `ModeSelectButton` | 拖房间大厅的“切换模式”按钮，建议只放在房主控件区域 | 可以 | 不绑定则房主不能在大厅切换模式 |
 | `SwitchRoleButton` | 拖房间大厅的“切换玩家/观战身份”按钮，建议放在大厅公共操作区 | 可以 | 不绑定则玩家加入后不能从 UI 切换身份 |
 | `ConnectButton` | 可选调试连接按钮 | 可以 | 正式流程不需要，创建/加入会自动连接 |
-| `ConnectionText / RoomText / HintText / ErrorText` | 拖对应显示位置的 `TMP_Text` 组件 | 可以 | 留空则不显示对应运行时文本；这些字段不是让策划手写内容 |
-| `PlayersText / ViewersText / NicknameListText` | 拖大厅名单显示用的 `TMP_Text` 组件 | 至少按 UI 方案绑定一种 | `PlayersText` 和 `ViewersText` 分开显示两组；`NicknameListText` 合并显示两组 |
-| `RoomIdText / PlayerCountText / ModeDisplayText` | 拖房间号、人数、模式名显示用的 `TMP_Text` 组件 | 可以 | 留空则该块 UI 不自动刷新 |
-| `ChatMessagesText / ToastText` | 拖聊天记录和短提示显示用的 `TMP_Text` 组件 | 可以 | 留空则聊天记录或短提示不显示，`ToastText` 为空会复用 `HintText` |
-| `ModeDisplayImage` | 拖场景里的 `Image` 组件 | 可以 | 留空则只显示模式文字，不显示模式图 |
+| `ConnectionDisplay / RoomSummaryDisplay / HintDisplay / ErrorDisplay` | 有背景板/图标/文字组合时拖整组 Root，并把组内一个或多个 TMP_Text 加到 Texts 数组 | 推荐 | 整组显示/隐藏，避免只改文字导致背景板残留 |
+| `PlayersDisplay / ViewersDisplay / NicknameListDisplay` | 拖名单整组 Root，并把组内一个或多个 TMP_Text 加到 Texts 数组 | 至少按 UI 方案绑定一种 | 分开显示或合并显示名单，背景板/标题/图标会跟着内容显隐 |
+| `RoomIdDisplay / PlayerCountDisplay / ModeDisplayGroup` | 拖房间号、人数、模式显示整组 Root，并把组内文字加到 Texts、需要替换 Sprite 的图片加到 Images | 推荐 | 留空则该块 UI 不自动刷新 |
+| `ChatMessagesDisplay / ToastDisplay` | 拖聊天记录和短提示整组 Root，并把组内一个或多个 TMP_Text 加到 Texts 数组 | 推荐 | 留空则聊天或短提示不显示 |
+| `ModeDisplayGroup.Images` | 拖模式显示组里需要跟随模式切换的 Image，可拖多个 | 可以 | 留空则只显示模式文字，不显示模式图 |
 | `ModeOptions` | 每个元素配置一个模式：`ModeId`、`DisplayName`、`DisplaySprite`、人数规则 | 不建议 | 留空时只能使用 `DefaultModeId`，模式按钮没有可切换的图文配置 |
 | `Gameplay Scene Name` | 填游戏中场景名 | 分场景玩法不可以 | 房间进入 Playing 后不会自动切玩法场景 |
 | `Fallback Return Scene Name` | 测试时填 RPG 场景名 | 可以 | 没有 ReturnContext 时无法退出回 RPG |
 
-`ModeDisplayImage` 只是 UI 上的图片显示容器，不是固定模式图。每个模式自己的展示图片填在 `ModeOptions` 的 `DisplaySprite` 中，例如 `draw_telephone` 配你画我猜图片，后续新增模式再给对应元素配另一张图片。
+`ModeDisplayGroup.Images` 是 UI 上的模式图片显示容器，不是固定模式图。每个模式自己的展示图片填在 `ModeOptions` 的 `DisplaySprite` 中，例如 `draw_telephone` 配你画我猜图片，后续新增模式再给对应元素配另一张图片。
+
+### MiniGameStartScreenUI 整组显示绑定
+如果某个显示区域不是单独一行文字，而是“背景板 + 图标 + 文字”的组合，不要只绑定 `TMP_Text`。只绑定文字时，脚本只能改文字内容，背景板和图标不会跟着显示/隐藏，容易出现背景残留或层级错乱。
+
+推荐绑定方式：
+
+1. 给这个显示区域建一个整体根节点，例如 `RoomIdDisplayGroup`。
+2. 把背景图、图标、文字都放到这个根节点下面。
+3. 在 `MiniGameStartScreenUI` 的“整组显示绑定 - 可选”里找到对应字段，例如 `Room Id Display`。
+4. `Root` 拖 `RoomIdDisplayGroup`。
+5. `Texts` 数组里拖这个组里的一个或多个 TMP_Text，例如主文字、阴影文字、描边副本文字。
+6. 如果这个组有需要由脚本替换 Sprite 的图片，`Images` 数组里拖对应 Image；纯背景图只要放在 Root 下即可，不必拖进 Images。
+7. `Hide Root When Empty` 开启时，内容为空会隐藏整个组；关闭时只改文字，不隐藏整组。
+
+常用对应关系：
+
+| UI 区域 | 推荐绑定字段 | 用途 |
+| --- | --- | --- |
+| 连接状态整组 | `ConnectionDisplay` | 显示已连接/未连接和玩家 ID。 |
+| 房间摘要整组 | `RoomSummaryDisplay` | 显示房间号、模式、房主、本机身份。 |
+| 玩家名单整组 | `PlayersDisplay` | 显示玩家昵称、房主、准备状态、离线状态。 |
+| 观战者名单整组 | `ViewersDisplay` | 显示观战者昵称和观战状态。 |
+| 模式显示整组 | `ModeDisplayGroup` | 同时控制模式名称和模式图片。 |
+| 房间号整组 | `RoomIdDisplay` | 显示系统分配或输入加入的房间号。 |
+| 人数整组 | `PlayerCountDisplay` | 显示当前玩家人数，不包含观战者。 |
+| 聊天记录整组 | `ChatMessagesDisplay` | 显示房间聊天记录。 |
+| 错误提示整组 | `ErrorDisplay` | 显示服务器错误，3 秒后自动隐藏。 |
+| 短提示整组 | `ToastDisplay` | 显示人数不足、玩家未准备等短提示。 |
+
+单独文本字段已取消。现在统一绑定 Display 组，方便背景板、图标、文字一起显示和隐藏。
+
+数量规则：
+
+- `Root` 只有一个，代表这块 UI 的总根节点。
+- `Texts` 可以配置多个，所有文本都会写入同一内容，适合文字阴影、描边副本、多个位置同步显示。
+- `Images` 可以配置多个，所有图片都会写入同一 Sprite，适合模式图多层表现或图标副本。
+- 静态背景板、装饰线、固定图标只要放在 `Root` 下面即可，不需要拖进 `Images`。
 
 `ModeSelectButton` 和 `SwitchRoleButton` 是两个不同功能：`ModeSelectButton` 切换小游戏模式，只允许房主在 Lobby 大厅使用；`SwitchRoleButton` 切换自己是玩家还是观战者，玩家点后变观战者，观战者点后变玩家，也只在 Lobby 大厅可用。游戏开始后身份不允许切换，避免破坏当前回合链路。
+
+### MiniGameGameplayScreenUI 整组显示绑定
+游戏中 UI 和开始 UI 使用同一套整组绑定规则。凡是“背景板 + 图标 + 文字”的显示区域，都必须使用 Display 绑定。
+
+推荐游戏中层级：
+
+```text
+Canvas
+└── MiniGameUIRoot
+    └── GameplayScreen（挂 MiniGameGameplayScreenUI）
+        ├── DrawingBoardRoot
+        │   ├── BrushToolsRoot
+        │   ├── ColorPaletteRoot
+        │   ├── CanvasRoot
+        │   ├── DrawerNameDisplayGroup -> DrawerNameDisplay.Root / Texts
+        │   └── FinishDrawingButton -> FinishDrawingButton
+        ├── ChatRoot
+        │   ├── ChatLogDisplayGroup -> ChatLogDisplay.Root / Texts
+        │   ├── ChatInput -> ChatInput
+        │   └── SendChatButton -> SendChatButton
+        ├── AnswerRoot
+        │   ├── AnswerInput -> AnswerInput
+        │   └── SubmitAnswerButton -> SubmitAnswerButton
+        ├── TopicRoot
+        │   ├── TopicDisplayGroup -> TopicDisplay.Root / Texts / Images
+        │   ├── AnswerDisplayGroup -> AnswerDisplay.Root / Texts
+        │   └── AnswererDisplayGroup -> AnswererDisplay.Root / Texts
+        ├── TimerRoot
+        │   └── TimerDisplayGroup -> TimerDisplay.Root / Texts
+        ├── PlayerListRoot
+        │   └── PlayerListDisplayGroup -> PlayerListDisplay.Root / Texts
+        ├── DrawPromptRoot
+        │   └── DrawPromptDisplayGroup -> DrawPromptDisplay.Root / Texts / Images
+        ├── AnswerPromptRoot
+        │   └── AnswerPromptDisplayGroup -> AnswerPromptDisplay.Root / Texts / Images
+        ├── EvaluationRoot
+        │   ├── AgreeButton -> AgreeButton
+        │   └── DisagreeButton -> DisagreeButton
+        ├── EvaluationListRoot
+        │   └── EvaluationListDisplayGroup -> EvaluationListDisplay.Root / Texts
+        └── ToastDisplayGroup -> ToastDisplay.Root / Texts / Images
+```
+
+绑定规则：
+
+- `DrawingBoardRoot / ChatRoot / AnswerRoot / TopicRoot / TimerRoot / PlayerListRoot / EvaluationRoot` 是模块根节点，脚本按玩家状态控制开放、显示或隐藏。
+- `XXXDisplay.Root` 是该显示区域自己的整组根节点，适合放背景板、图标、文字、装饰。
+- `XXXDisplay.Texts` 可以拖多个 TMP_Text，例如主文字、阴影文字、描边副本。
+- `XXXDisplay.Images` 可以拖多个需要由脚本替换 Sprite 的 Image；固定背景图只放在 Root 下，不用拖进 Images。
+- 如果某个模块有整块背景，例如题目板、倒计时牌、提示弹窗，务必拖 `Root`，不要只拖文字。
 
 ### MiniGameDialogueActionHandler
 建议挂载位置：RPG 中 MiniGame NPC 所在场景，或 Gal 行为桥接根物体。
@@ -215,5 +301,10 @@ MiniGame 不直接操作 RPG 玩家控制和存档。场景切换交给 NiumaSce
 | `Default MiniGame Scene Name` | 填 MiniGame 开始场景名 | 不可以 | 对话 Action 未指定场景时无法进入小游戏 |
 | `Default Return Spawn Point Id` | 填 NPC 附近返回点 | 建议填写 | 返回 RPG 时可能落到默认点 |
 | `Push Return Context` | RPG 进入 MiniGame 必须开启 | 不建议关闭 | 退出 MiniGame 会 ReturnContextMissing |
+
+
+
+
+
 
 
