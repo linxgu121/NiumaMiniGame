@@ -95,6 +95,61 @@ Canvas
 
 模式图片不要只在 `ModeDisplayImage` 上放一张固定图。正确做法是：`ModeDisplayImage` 拖 RoomPanel 里的 Image 组件；每个 `ModeOptions` 元素的 `DisplaySprite` 分别配置该模式自己的展示图。
 
+### MiniGameStartScreenUI 场景初始显隐设置
+这里说的是 **UI 场景制作完成并保存时**，各个 UI 物体在 Hierarchy 里应该是激活还是隐藏。运行时切页由 `MiniGameStartScreenUI` 负责，策划不要在按钮事件里手动 `SetActive` 这些页面根节点。
+
+场景保存时建议状态：
+
+| UI 物体 | 保存场景时状态 | 原因 |
+| --- | --- | --- |
+| `Canvas` | 激活 | Unity UI 必须可用。 |
+| `EventSystem` | 激活 | Button / InputField 需要它接收点击。 |
+| `MiniGameUIRoot` | 激活 | 整个开始 UI 的总根节点。 |
+| `StartScreen` | 激活 | 挂 `MiniGameStartScreenUI` 的物体必须激活，脚本才会运行。 |
+| `StartRoot` | 激活 | 开始界面的总内容根节点；脚本会在需要时保持它显示。 |
+| `HomePanel` | 激活 | 玩家进入 MiniGame 开始场景后第一眼看到入口页。 |
+| `NamingPanel` | 隐藏 | 点击“开始游戏”后由脚本显示。 |
+| `PreparePanel` | 隐藏 | 取名确认后由脚本显示。 |
+| `RoomInputPanel` | 隐藏 | 点击“加入房间”或“观战加入”后由脚本显示。 |
+| `RoomPanel` | 隐藏 | 创建/加入/观战成功并收到房间快照后由脚本显示。 |
+| `HostRoomControls` | 隐藏 | 进入房间后，如果本机是房主，脚本显示。 |
+| `GuestRoomControls` | 隐藏 | 进入房间后，如果本机是普通玩家，脚本显示。 |
+| `ViewerRoomControls` | 隐藏 | 进入房间后，如果本机是观战者，脚本显示。 |
+| `HintText / ErrorText / ToastText` 所在物体 | 建议激活 | 文本内容可为空，脚本会写入提示；如果做成整块弹窗，可默认隐藏弹窗根节点。 |
+| `ModeDisplayImage` 所在物体 | 跟随 `RoomPanel` | 它放在房间页里，房间页隐藏时它自然隐藏。 |
+
+制作规则：
+
+- 页面级根节点只用这五个：`HomePanel / NamingPanel / PreparePanel / RoomInputPanel / RoomPanel`。
+- 某个按钮、图片、输入框属于哪个页面，就放到对应 Panel 下面，不要散放在 `Canvas` 根下。
+- 如果一个 UI 物体一开始应该看不见，但后续随页面出现，把它放到对应 Panel 下面，并让这个 Panel 控制它的显示。
+- 不要把需要运行时显示的页面根节点删掉或不绑定；隐藏可以，未绑定则脚本不知道它存在。
+- `RoomPanel` 里的房主按钮、普通玩家按钮、观战按钮建议分别放进 `HostRoomControls / GuestRoomControls / ViewerRoomControls` 三个根节点，由脚本根据身份显示。
+- `退出游戏按钮` 可以放在多个页面，但都绑定同一个 `ExitGameButton` 字段；它的职责是退出 MiniGame 回 RPG。
+- `返回按钮` 不退出 MiniGame，只返回上一个 UI 页面；例如 `RoomBackButton` 是离开房间回 `PreparePanel`。
+
+运行时显隐流程：
+
+| 运行时动作 | 脚本显示 | 脚本隐藏 |
+| --- | --- | --- |
+| 进入 MiniGame 开始场景 | `HomePanel` | `NamingPanel`、`PreparePanel`、`RoomInputPanel`、`RoomPanel` |
+| 点击入口页“开始游戏” | `NamingPanel` | `HomePanel`、`PreparePanel`、`RoomInputPanel`、`RoomPanel` |
+| 取名页点击“确认” | `PreparePanel` | `HomePanel`、`NamingPanel`、`RoomInputPanel`、`RoomPanel` |
+| 取名页点击“返回” | `HomePanel` | `NamingPanel`、`PreparePanel`、`RoomInputPanel`、`RoomPanel` |
+| 预备页点击“加入房间” | `RoomInputPanel` | `HomePanel`、`NamingPanel`、`PreparePanel`、`RoomPanel` |
+| 预备页点击“观战加入” | `RoomInputPanel` | `HomePanel`、`NamingPanel`、`PreparePanel`、`RoomPanel` |
+| 房间号输入页点击“返回” | `PreparePanel` | `HomePanel`、`NamingPanel`、`RoomInputPanel`、`RoomPanel` |
+| 创建房间成功 / 加入房间成功 / 观战加入成功 | `RoomPanel` | `HomePanel`、`NamingPanel`、`PreparePanel`、`RoomInputPanel` |
+| 房间页点击“返回” | `PreparePanel` | `HomePanel`、`NamingPanel`、`RoomInputPanel`、`RoomPanel` |
+| 任意页面点击“退出游戏” | 由 `NiumaScene` 切回 RPG | MiniGame UI 随场景卸载 |
+
+如果运行时出现“点击创建房间后全部 UI 隐藏”的情况，优先检查：
+
+1. `RoomPanel` 是否绑定到了 `MiniGameStartScreenUI.RoomPanel`。
+2. `RoomPanel` 是否只是保存场景时隐藏，而不是被删除或挂在未激活的父物体外层。
+3. `MiniGameUIViewBridge` 的 Receiver 是否绑定到 `MiniGameStartScreenUI`。
+4. 后端或 Mock 是否发送了房间快照；未收到快照时脚本无法进入房间页。
+
 ## 协作边界
 MiniGame 不直接操作 RPG 玩家控制和存档。场景切换交给 NiumaScene，入口选择交给 NiumaGal，联机权威状态由后端房间状态机托管。
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text;
 using NiumaMiniGame.Bridge;
 using NiumaMiniGame.Controller;
@@ -44,7 +44,6 @@ namespace NiumaMiniGame.UIBridge
         RoomInput,
         Room
     }
-
     /// <summary>
     /// 你画我猜 2D 开始界面 UI。
     /// 负责把 MiniGamePanelViewData 显示到 Canvas，并把按钮点击转成 Controller 命令。
@@ -214,6 +213,9 @@ namespace NiumaMiniGame.UIBridge
         [Tooltip("本地短提示显示秒数。")]
         [SerializeField] private float toastSeconds = 2f;
 
+        [Tooltip("错误提示自动隐藏秒数。服务器错误、房间号为空等错误会显示这段时间后自动清空。")]
+        [SerializeField] private float errorSeconds = 3f;
+
         [Header("玩法场景跳转")]
         [Tooltip("真正你画我猜玩法场景名（开始/房间场景 → 游戏中 UI 场景；为空时房间进入 Playing 后不会自动切场景）。")]
         [SerializeField] private string gameplaySceneName;
@@ -267,8 +269,10 @@ namespace NiumaMiniGame.UIBridge
         private bool _pendingJoinAsViewer;
         private int _selectedModeIndex = -1;
         private float _toastHideTime = -1f;
+        private float _errorHideTime = -1f;
         private bool _gameplaySceneLoadRequested;
         private long _lastAppliedToastTimeMs;
+        private string _lastAppliedErrorText;
         private bool _warnedMissingRoomPanel;
 
         private void Awake()
@@ -291,8 +295,12 @@ namespace NiumaMiniGame.UIBridge
         {
             if (_toastHideTime > 0f && Time.unscaledTime >= _toastHideTime)
             {
-                _toastHideTime = -1f;
-                SetText(GetToastTarget(), string.Empty);
+                ClearToast();
+            }
+
+            if (_errorHideTime > 0f && Time.unscaledTime >= _errorHideTime)
+            {
+                HideError();
             }
         }
 
@@ -428,6 +436,7 @@ namespace NiumaMiniGame.UIBridge
 
         public void ClickLeaveRoom()
         {
+            ClearTransientTips();
             var sent = ResolveController(true) && miniGameController.LeaveRoom();
             if (!sent)
             {
@@ -448,6 +457,7 @@ namespace NiumaMiniGame.UIBridge
 
         public void ClickReturnToPreviousScene()
         {
+            ClearTransientTips();
             if (ResolveController(false))
             {
                 miniGameController.LeaveRoom();
@@ -523,7 +533,7 @@ namespace NiumaMiniGame.UIBridge
             var roomId = roomIdInput == null ? null : roomIdInput.text;
             if (string.IsNullOrWhiteSpace(roomId))
             {
-                SetText(errorText, "请输入房间 ID。");
+                ShowError("请输入房间 ID。");
                 return;
             }
 
@@ -645,7 +655,6 @@ namespace NiumaMiniGame.UIBridge
             SetActive(guestRoomControls, hasRoom && !isHost && !isViewer);
             SetActive(viewerRoomControls, hasRoom && isViewer);
         }
-
         private void RefreshTexts(MiniGamePanelViewData panel)
         {
             RefreshModeDisplay(panel);
@@ -661,7 +670,7 @@ namespace NiumaMiniGame.UIBridge
                 SetText(playersText, string.Empty);
                 SetText(viewersText, string.Empty);
                 SetText(hintText, BuildPageHint());
-                SetText(errorText, string.Empty);
+                ClearError();
                 return;
             }
 
@@ -693,7 +702,7 @@ namespace NiumaMiniGame.UIBridge
                 SetText(hintText, BuildHint(panel));
             }
 
-            SetText(errorText, BuildErrorText(panel.LastError));
+            ApplyPanelError(BuildErrorText(panel.LastError));
         }
 
         private void RefreshButtonStates(MiniGamePanelViewData panel)
@@ -991,6 +1000,59 @@ namespace NiumaMiniGame.UIBridge
             {
                 miniGameController.SendChat($"[系统提示] {message}");
             }
+        }
+
+        private void ShowError(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                ClearError();
+                return;
+            }
+
+            _lastAppliedErrorText = message;
+            SetText(errorText, message);
+            _errorHideTime = Time.unscaledTime + Mathf.Max(0.1f, errorSeconds);
+        }
+
+        private void ApplyPanelError(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                ClearError();
+                return;
+            }
+
+            if (string.Equals(_lastAppliedErrorText, message, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            ShowError(message);
+        }
+
+        private void ClearTransientTips()
+        {
+            ClearToast();
+            ClearError();
+        }
+
+        private void ClearToast()
+        {
+            _toastHideTime = -1f;
+            SetText(GetToastTarget(), string.Empty);
+        }
+
+        private void HideError()
+        {
+            _errorHideTime = -1f;
+            SetText(errorText, string.Empty);
+        }
+
+        private void ClearError()
+        {
+            _lastAppliedErrorText = null;
+            HideError();
         }
 
         private void ApplyServerToast(MiniGameToastViewData toast)
